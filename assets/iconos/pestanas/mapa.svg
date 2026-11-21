@@ -1,0 +1,42 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" width="512" height="512">
+  <defs>
+    <clipPath id="m"><path d="M84 150 L192 118 L320 150 L428 118 L428 414 L320 446 L192 414 L84 446 Z"/></clipPath>
+    <linearGradient id="sea" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#5FE0D3"/><stop offset="1" stop-color="#1E9C90"/>
+    </linearGradient>
+    <linearGradient id="land" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#FFE2A8"/><stop offset="1" stop-color="#FFC56B"/>
+    </linearGradient>
+    <linearGradient id="pin" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#FF6FA6"/><stop offset="1" stop-color="#E02470"/>
+    </linearGradient>
+  </defs>
+
+  <g clip-path="url(#m)">
+    <rect x="60" y="100" width="400" height="360" fill="url(#sea)"/>
+    <!-- tierra genérica -->
+    <path d="M60 100 L300 100 Q290 160 250 190 Q220 215 236 260 Q252 300 214 330 Q180 356 196 400 L206 460 L60 460 Z" fill="url(#land)"/>
+    <path d="M60 300 Q120 280 150 320 Q170 350 140 390 L60 420 Z" fill="#FFB547" opacity="0.55"/>
+    <path d="M330 300 Q360 280 382 300 Q398 322 372 338 Q344 350 330 330 Z" fill="url(#land)" stroke="#0E0818" stroke-width="6"/>
+    <path d="M384 372 Q398 362 408 374 Q404 388 390 386 Z" fill="url(#land)" stroke="#0E0818" stroke-width="5"/>
+    <!-- costa -->
+    <path d="M300 100 Q290 160 250 190 Q220 215 236 260 Q252 300 214 330 Q180 356 196 400 L206 460" fill="none" stroke="#0E0818" stroke-width="7"/>
+    <!-- calles -->
+    <path d="M100 180 L220 170 M130 240 L210 236 M150 140 L160 300" stroke="#FFF4E6" stroke-width="8" stroke-linecap="round" opacity="0.9"/>
+    <!-- ruta -->
+    <path d="M118 380 Q170 330 160 270 Q154 220 230 210 Q300 200 340 180" fill="none" stroke="#FF3E8A" stroke-width="9" stroke-linecap="round" stroke-dasharray="4 18"/>
+    <!-- dobleces -->
+    <path d="M192 118 L320 150 L320 446 L192 414 Z" fill="#0E0818" opacity="0.18"/>
+    <path d="M320 150 L428 118 L428 414 L320 446 Z" fill="#FFFFFF" opacity="0.08"/>
+  </g>
+  <path d="M84 150 L192 118 L320 150 L428 118 L428 414 L320 446 L192 414 L84 446 Z" fill="none" stroke="#0E0818" stroke-width="16" stroke-linejoin="round"/>
+  <path d="M192 118 L192 414 M320 150 L320 446" stroke="#0E0818" stroke-width="7"/>
+  <!-- punto de inicio -->
+  <circle cx="118" cy="380" r="13" fill="#FFF4E6" stroke="#0E0818" stroke-width="7"/>
+
+  <!-- pin -->
+  <ellipse cx="346" cy="196" rx="30" ry="10" fill="#0E0818" opacity="0.35"/>
+  <path d="M346 196 C330 168 300 146 300 108 A46 46 0 1 1 392 108 C392 146 362 168 346 196 Z" fill="url(#pin)" stroke="#0E0818" stroke-width="13" stroke-linejoin="round"/>
+  <circle cx="346" cy="106" r="18" fill="#FFF4E6" stroke="#0E0818" stroke-width="7"/>
+  <path d="M318 88 Q324 74 338 70" stroke="#FFFFFF" stroke-width="7" stroke-linecap="round" fill="none" opacity="0.6"/>
+</svg>
