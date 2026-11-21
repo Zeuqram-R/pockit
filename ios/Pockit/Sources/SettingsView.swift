@@ -62,6 +62,12 @@ struct SettingsView: View {
                         set: { skin.localEnabled = $0 }))
                         .tint(Theme.switchPink)
                         .menuRow()
+                    Toggle(t.s("Chat estilo iMessage", "iMessage-style chat"), isOn: Binding(
+                        get: { skin.chatLocalEnabled },
+                        set: { skin.chatLocalEnabled = $0 }))
+                        .tint(Theme.switchPink)
+                        .disabled(!skin.localEnabled)
+                        .menuRow()
                     if skin.remoteSaysOff {
                         Label(t.skinRemoteOff, systemImage: "exclamationmark.triangle")
                             .foregroundStyle(Theme.sunset)

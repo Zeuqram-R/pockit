@@ -1,5 +1,6 @@
 import SwiftUI
 import WebKit
+import UIKit
 
 struct RootView: View {
     @EnvironmentObject private var settings: AppSettings
@@ -54,6 +55,15 @@ struct RootView: View {
                     .zIndex(2)
             }
 
+            if let n = store.notice {
+                NoticeCard(notice: n) { if store.notice == n { store.notice = nil } }
+                    .id(n.id)
+                    .frame(maxHeight: .infinity, alignment: .bottom)
+                    .padding(.bottom, keyboard.visible ? 12 : 86)
+                    .transition(.move(edge: .bottom).combined(with: .opacity))
+                    .zIndex(2)
+            }
+
             if showLoading {
                 LoadingView()
                     .transition(.opacity)
@@ -61,6 +71,7 @@ struct RootView: View {
             }
         }
         .animation(.easeOut(duration: 0.25), value: web.sendProblem)
+        .animation(.spring(duration: 0.35), value: store.notice)
         .sheet(isPresented: $showSettings) {
             SettingsView()
                 .environmentObject(settings)
@@ -161,6 +172,49 @@ struct TopBar: View {
                 web.send(state.spoilersOn ? "activa spoilers" : "desactiva spoilers")
             }
             Button(t.cancel, role: .cancel) {}
+        }
+    }
+}
+
+/// Tarjetita nativa: "Marisol anotó…".
+struct NoticeCard: View {
+    let notice: StoreNotice
+    let onClose: () -> Void
+    @EnvironmentObject private var settings: AppSettings
+    @EnvironmentObject private var state: PockitState
+
+    var body: some View {
+        Button {
+            switch notice.emoji {
+            case "🃏": state.tab = .collectibles
+            case "📌": state.tab = .pendientes
+            case "💰": state.tab = .money
+            default: break
+            }
+            onClose()
+        } label: {
+            HStack(spacing: 10) {
+                Text(notice.emoji).font(.system(size: 20))
+                VStack(alignment: .leading, spacing: 1) {
+                    Text(settings.t.s("MARISOL ANOTÓ", "MARISOL LOGGED")).font(Theme.display(12, weight: .semibold)).foregroundStyle(Theme.switchPink)
+                    Text(notice.text).font(Theme.text(14, .medium, relativeTo: .subheadline)).foregroundStyle(.white).lineLimit(2)
+                }
+                Spacer(minLength: 0)
+            }
+            .padding(.horizontal, 14)
+            .padding(.vertical, 10)
+            .background(Capsule(style: .continuous).fill(.ultraThinMaterial))
+            .background(Capsule(style: .continuous).fill(Theme.nightDeep.opacity(0.6)))
+            .overlay(Capsule(style: .continuous).stroke(Theme.switchPink.opacity(0.6), lineWidth: 1))
+            .shadow(color: .black.opacity(0.3), radius: 10, y: 4)
+        }
+        .buttonStyle(.plain)
+        .frame(maxWidth: 480)
+        .padding(.horizontal, 20)
+        .task {
+            UINotificationFeedbackGenerator().notificationOccurred(.success)
+            try? await Task.sleep(for: .seconds(3))
+            onClose()
         }
     }
 }

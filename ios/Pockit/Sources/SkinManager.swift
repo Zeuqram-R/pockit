@@ -14,12 +14,20 @@ final class SkinManager: ObservableObject {
     @AppStorage("pockit.skin.remote") private var remoteEnabled = true
     @AppStorage("pockit.skin.css") private var cachedCSS = ""
     @AppStorage("pockit.skin.version") private(set) var cssVersion = 0
+    /// Chat estilo iMessage (chat.js remoto): switch local + chatEnabled remoto.
+    @AppStorage("pockit.chat.local") var chatLocalEnabled = true {
+        willSet { objectWillChange.send() }
+        didSet { apply() }
+    }
+    @AppStorage("pockit.chat.remote") private var chatRemoteEnabled = true
+    @AppStorage("pockit.chat.version") private(set) var chatVersion = 0
 
     @Published private(set) var lastStatus = ""
 
     private weak var web: WebModel?
 
     var isActive: Bool { localEnabled && remoteEnabled }
+    var chatActive: Bool { isActive && chatLocalEnabled && chatRemoteEnabled }
     var remoteSaysOff: Bool { !remoteEnabled }
 
     func attach(_ web: WebModel) {
@@ -40,8 +48,15 @@ final class SkinManager: ObservableObject {
                     cachedCSS = String(decoding: css, as: UTF8.self)
                     cssVersion = version
                 }
+                chatRemoteEnabled = (json["chatEnabled"] as? Bool) ?? true
+                let cv = (json["chatVersion"] as? Int) ?? 0
+                if cv > 0, cv != chatVersion || cachedChat == nil {
+                    let js = try await fetch("chat.js?v=\(cv)")
+                    try? js.write(to: Self.chatCacheURL, options: .atomic)
+                    chatVersion = cv
+                }
             }
-            lastStatus = "ok v\(cssVersion)"
+            lastStatus = "ok v\(cssVersion) · chat v\(chatVersion)"
         } catch {
             lastStatus = "sin conexión, usando copia guardada"
         }
@@ -65,7 +80,23 @@ final class SkinManager: ObservableObject {
         return ""
     }
 
-    /// Pone o quita el <style id="pockit-skin"> en la página actual y en las próximas.
+    private static var chatCacheURL: URL {
+        FileManager.default.urls(for: .cachesDirectory, in: .userDomainMask)[0].appendingPathComponent("pockit-chat.js")
+    }
+
+    private var cachedChat: String? {
+        guard let d = try? Data(contentsOf: Self.chatCacheURL), !d.isEmpty else { return nil }
+        return String(decoding: d, as: UTF8.self)
+    }
+
+    private var chatJS: String {
+        if let c = cachedChat { return c }
+        if let url = Bundle.main.url(forResource: "chat-fallback", withExtension: "js"),
+           let s = try? String(contentsOf: url, encoding: .utf8) { return s }
+        return ""
+    }
+
+    /// Pone o quita el <style id="pockit-skin"> y el chat estilo iMessage, en la página actual y en las próximas.
     func apply() {
         guard let web else { return }
         let content = isActive ? css : ""
@@ -78,8 +109,18 @@ final class SkinManager: ObservableObject {
           if (el.textContent !== css) el.textContent = css;
         })();
         """
-        let script = WKUserScript(source: js, injectionTime: .atDocumentEnd, forMainFrameOnly: true)
-        web.setExtraScripts([script])
-        web.run(js)
+        var scripts = [WKUserScript(source: js, injectionTime: .atDocumentEnd, forMainFrameOnly: true)]
+        if chatActive {
+            let chat = chatJS
+            scripts.append(WKUserScript(source: chat, injectionTime: .atDocumentEnd, forMainFrameOnly: true))
+            web.setExtraScripts(scripts)
+            web.run(js)
+            web.run(chat)
+        } else {
+            web.setExtraScripts(scripts)
+            web.run(js)
+            // Apagar el chat estilo iMessage en la página abierta: quitar su estilo y sus clases.
+            web.run("(function(){var s=document.getElementById('pockit-chat');if(s)s.remove();['pk-ubub','pk-urow','pk-abub','pk-composer'].forEach(function(c){document.querySelectorAll('.'+c).forEach(function(e){e.classList.remove(c)})});window.__pockitChat=null;})();")
+        }
     }
 }

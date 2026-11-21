@@ -123,7 +123,7 @@ final class WebModel: NSObject, ObservableObject {
     /// Devuelve las variables de color que usa claude.ai (pa' ajustar el skin).
     func diagnose() async -> String {
         do {
-            let result = try await webView.evaluateJavaScript("window.pockitDiagnose ? window.pockitDiagnose() : 'sin puente'")
+            let result = try await webView.evaluateJavaScript("(window.pockitDiagnose ? window.pockitDiagnose() : 'sin puente') + '\\n--- chat ---\\n' + (window.pockitChatDiagnose ? window.pockitChatDiagnose() : 'chat apagado')")
             return (result as? String) ?? "sin resultado"
         } catch {
             return "error: \(error.localizedDescription)"

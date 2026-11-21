@@ -75,9 +75,19 @@ struct PockitData: Codable {
 // MARK: - Store
 
 /// Todos los datos de Pockit fuera del chat. Se guardan en un JSON local (Application Support).
+/// Aviso nativo cuando Marisol anota algo (tarjetita encima de la barra).
+struct StoreNotice: Identifiable, Equatable {
+    let id = UUID()
+    let emoji: String
+    let text: String
+}
+
 @MainActor
 final class PockitStore: ObservableObject {
     @Published private(set) var data = PockitData()
+    @Published var notice: StoreNotice?
+    /// Mientras se importa events.json no se muestran avisos.
+    private var quiet = false
 
     private let url: URL = {
         let dir = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask)[0]
@@ -111,6 +121,8 @@ final class PockitStore: ObservableObject {
     private func importEventLog() {
         let old = (try? JSONDecoder().decode([[String: String]].self, from: Data(contentsOf: EventLog.url))) ?? []
         let iso = ISO8601DateFormatter()
+        quiet = true
+        defer { quiet = false }
         for entry in old { ingest(entry, at: entry["at"].flatMap { iso.date(from: $0) } ?? Date()) }
         mutate { $0.importedEventLog = true }
     }
@@ -119,10 +131,14 @@ final class PockitStore: ObservableObject {
 
     func ingest(_ tag: [String: String], at date: Date = Date()) {
         if let cat = tag["cat"], let item = tag["item"] {
+            let before = collectiblesFound
             addCollectible(category: cat, item: item, total: tag["total"].flatMap(Self.number), at: date)
+            if collectiblesFound > before { announce("🃏", lang: "Collectible: \(item)") }
         }
         if let tip = tag["tip"]?.trimmingCharacters(in: .whitespacesAndNewlines), !tip.isEmpty {
+            let before = data.pendientes.count
             addPendiente(tip, source: "marisol", at: date)
+            if data.pendientes.count > before { announce("📌", lang: tip) }
         }
         if tag["bank"] != nil || tag["app"] != nil || tag["home"] != nil {
             let last = data.money.last
@@ -132,11 +148,20 @@ final class PockitStore: ObservableObject {
                 app: tag["app"].flatMap(Self.number) ?? last?.app ?? 0,
                 home: tag["home"].flatMap(Self.number) ?? last?.home ?? 0,
                 source: "marisol")
+            let before = data.money.count
             addMoney(snap)
+            if data.money.count > before { announce("💰", lang: "Money: \(Fmt.money(snap.total))") }
         }
         if let mission = tag["mission"]?.trimmingCharacters(in: .whitespaces), !mission.isEmpty {
+            let before = data.missions.count
             logMission(mission, pct: tag["pct"].flatMap(Self.number), at: date)
+            if data.missions.count > before { announce("📍", lang: mission) }
         }
+    }
+
+    private func announce(_ emoji: String, lang text: String) {
+        guard !quiet else { return }
+        notice = StoreNotice(emoji: emoji, text: text)
     }
 
     static func number(_ s: String) -> Int? {
