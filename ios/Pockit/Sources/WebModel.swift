@@ -19,6 +19,11 @@ final class WebModel: NSObject, ObservableObject {
 
     /// Lo llama el puente JS con las etiquetas de Marisol.
     var onTags: (@MainActor ([[String: Any]]) -> Void)?
+    /// Lista de conversaciones del proyecto leída por chat.js.
+    var onProjectChats: (@MainActor ([[String: Any]]) -> Void)?
+    /// Se abrió una conversación (id, título de la pestaña).
+    var onChatVisited: (@MainActor (String, String?) -> Void)?
+    private var titleObservation: NSKeyValueObservation?
     private var prefix = ""
 
     let webView: WKWebView
@@ -57,7 +62,10 @@ final class WebModel: NSObject, ObservableObject {
             Task { @MainActor in self?.progress = wv.estimatedProgress }
         }
         urlObservation = webView.observe(\.url, options: [.new]) { [weak self] wv, _ in
-            Task { @MainActor in self?.currentPath = wv.url?.path ?? "" }
+            Task { @MainActor in self?.urlChanged(wv) }
+        }
+        titleObservation = webView.observe(\.title, options: [.new]) { [weak self] wv, _ in
+            Task { @MainActor in self?.urlChanged(wv) }
         }
         // Inspectable desde Safari en la Mac: así se ajusta el skin si claude.ai cambia.
         if #available(iOS 16.4, *) { webView.isInspectable = true }
@@ -67,6 +75,31 @@ final class WebModel: NSObject, ObservableObject {
     func loadHome() {
         loadError = false
         webView.load(URLRequest(url: Self.projectURL))
+    }
+
+    private func urlChanged(_ wv: WKWebView) {
+        let path = wv.url?.path ?? ""
+        if path != currentPath { currentPath = path }
+        if path.hasPrefix("/chat/") {
+            let id = String(path.dropFirst("/chat/".count)).components(separatedBy: "/").first ?? ""
+            onChatVisited?(id, wv.title)
+        }
+    }
+
+    /// Abre una conversación del proyecto que claude.ai lista sin link: va a la pantalla del proyecto y toca su fila.
+    func openProjectChat(title: String) {
+        let call = "window.pockitOpenProjectChat ? window.pockitOpenProjectChat(\(Self.jsString(title))) : false"
+        if currentPath.hasPrefix("/project/") {
+            webView.evaluateJavaScript(call)
+            return
+        }
+        open(path: Self.projectURL.path)
+        Task { @MainActor in
+            for _ in 0..<25 {
+                try? await Task.sleep(for: .milliseconds(200))
+                if let ok = try? await webView.evaluateJavaScript(call) as? Bool, ok { return }
+            }
+        }
     }
 
     /// Abre una ruta de claude.ai sin recargar toda la página cuando se puede (navegación interna de la app web).
@@ -166,6 +199,8 @@ final class WebModel: NSObject, ObservableObject {
         switch type {
         case "tags":
             if let items = dict["items"] as? [[String: Any]] { onTags?(items) }
+        case "projectChats":
+            if let items = dict["items"] as? [[String: Any]] { onProjectChats?(items) }
         case "sendResult":
             if (dict["ok"] as? Bool) == false { sendProblem = dict["reason"] as? String ?? "?" }
         default:

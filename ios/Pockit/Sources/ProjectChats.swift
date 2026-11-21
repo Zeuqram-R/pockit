@@ -1,108 +1,75 @@
 import SwiftUI
-import WebKit
 
 /// Una conversación del Project GTA VI.
-struct ProjectChat: Identifiable, Hashable {
-    let id: String      // uuid de la conversación
-    let title: String
-    let when: String    // "Hace 2 minutos", tal como lo muestra claude.ai
-    var path: String { "/chat/\(id)" }
+struct ProjectChat: Identifiable, Hashable, Codable {
+    var id: String { chatID.isEmpty ? "t:" + title : chatID }
+    var chatID: String  // uuid de la conversación ("" si claude.ai no lo da en la lista)
+    var title: String
+    var when: String    // "Hace 2 minutos", tal como lo muestra claude.ai
+    var lastSeen = Date()
+    var path: String { "/chat/\(chatID)" }
 }
 
-/// Lee la lista de conversaciones del Project GTA VI desde la página del proyecto,
-/// en una WebView escondida (misma sesión), sin tocar el chat que tenés abierto.
+/// Lista de conversaciones del Project GTA VI.
+/// Sale de dos lados: lo que claude.ai muestra en "Recientes" del proyecto (lo lee chat.js en la pantalla de
+/// conversación nueva) y las conversaciones que abrís o empezás dentro de Pockit.
 @MainActor
-final class ProjectChats: NSObject, ObservableObject, WKNavigationDelegate {
+final class ProjectChats: ObservableObject {
     @Published private(set) var chats: [ProjectChat] = []
-    @Published private(set) var loading = false
-    @Published private(set) var failed = false
 
-    let webView: WKWebView
-    private var lastRefresh: Date = .distantPast
-    private static let cacheKey = "pockit.projectChats"
+    private static let cacheKey = "pockit.projectChats.v2"
 
-    override init() {
-        let config = WKWebViewConfiguration()
-        config.websiteDataStore = .default()
-        config.applicationNameForUserAgent = "Version/18.0 Mobile/15E148 Safari/604.1"
-        config.defaultWebpagePreferences.preferredContentMode = .mobile
-        webView = WKWebView(frame: CGRect(x: 0, y: 0, width: 390, height: 844), configuration: config)
-        super.init()
-        webView.navigationDelegate = self
-        if let raw = UserDefaults.standard.array(forKey: Self.cacheKey) as? [[String: String]] {
-            chats = raw.compactMap { d in
-                guard let id = d["id"], let title = d["title"] else { return nil }
-                return ProjectChat(id: id, title: title, when: d["when"] ?? "")
-            }
+    init() {
+        if let raw = UserDefaults.standard.data(forKey: Self.cacheKey),
+           let list = try? JSONDecoder().decode([ProjectChat].self, from: raw) {
+            chats = list
         }
     }
 
-    /// Recarga la lista (si la última vez fue hace más de `minAge` segundos).
-    func refresh(minAge: TimeInterval = 20) {
-        guard !loading, Date().timeIntervalSince(lastRefresh) > minAge else { return }
-        loading = true
-        failed = false
-        lastRefresh = Date()
-        webView.load(URLRequest(url: WebModel.projectURL))
+    private func save() {
+        if let raw = try? JSONEncoder().encode(chats) { UserDefaults.standard.set(raw, forKey: Self.cacheKey) }
     }
 
-    func webView(_ webView: WKWebView, didFinish navigation: WKNavigation!) {
-        Task { await extract() }
-    }
-
-    func webView(_ webView: WKWebView, didFail navigation: WKNavigation!, withError error: Error) { done(failed: true) }
-    func webView(_ webView: WKWebView, didFailProvisionalNavigation navigation: WKNavigation!, withError error: Error) { done(failed: true) }
-
-    private func done(failed: Bool) {
-        loading = false
-        self.failed = failed && chats.isEmpty
-    }
-
-    /// Junta los links /chat/… de la página del proyecto (espera a que la app web los dibuje y baja pa' cargar más).
-    private func extract() async {
-        let js = """
-        return await (async function(){
-          const sleep = (ms) => new Promise(r => setTimeout(r, ms));
-          const seen = new Map();
-          const collect = () => {
-            document.querySelectorAll('a[href*="/chat/"]').forEach(a => {
-              const m = (a.getAttribute('href') || '').match(/\\/chat\\/([0-9a-f-]{20,})/i);
-              if (!m || seen.has(m[1])) return;
-              const lines = (a.innerText || '').split('\\n').map(s => s.trim()).filter(Boolean);
-              if (!lines.length) return;
-              seen.set(m[1], { id: m[1], title: lines[0], when: lines.slice(1).join(' · ') });
-            });
-          };
-          for (let i = 0; i < 30 && !document.querySelector('a[href*="/chat/"]'); i++) await sleep(200);
-          for (let i = 0; i < 6; i++) {
-            collect();
-            const before = seen.size;
-            window.scrollTo(0, document.body.scrollHeight);
-            document.querySelectorAll('*').forEach(e => { if (e.scrollHeight > e.clientHeight + 40 && e.clientHeight > 200) e.scrollTop = e.scrollHeight; });
-            await sleep(500);
-            collect();
-            if (seen.size === before && i > 0) break;
-          }
-          return JSON.stringify(Array.from(seen.values()));
-        })()
-        """
-        do {
-            let result = try await webView.callAsyncJavaScript(js, contentWorld: .page)
-            if let text = result as? String, let data = text.data(using: .utf8),
-               let list = try JSONSerialization.jsonObject(with: data) as? [[String: String]] {
-                let parsed = list.compactMap { d -> ProjectChat? in
-                    guard let id = d["id"], let title = d["title"] else { return nil }
-                    return ProjectChat(id: id, title: title, when: d["when"] ?? "")
-                }
-                if !parsed.isEmpty || chats.isEmpty {
-                    chats = parsed
-                    UserDefaults.standard.set(list, forKey: Self.cacheKey)
-                }
-            }
-            done(failed: false)
-        } catch {
-            done(failed: true)
+    /// Lo que mandó chat.js desde la página del proyecto (en el orden de claude.ai: más reciente primero).
+    func ingestFromProjectPage(_ items: [[String: Any]]) {
+        var merged: [ProjectChat] = []
+        for item in items {
+            let title = (item["title"] as? String ?? "").trimmingCharacters(in: .whitespaces)
+            guard !title.isEmpty else { continue }
+            var id = item["id"] as? String ?? ""
+            if id.isEmpty, let known = chats.first(where: { $0.title == title && !$0.chatID.isEmpty }) { id = known.chatID }
+            merged.append(ProjectChat(chatID: id, title: title, when: item["when"] as? String ?? ""))
         }
+        // Las que se abrieron en Pockit y claude.ai ya no enseña en "Recientes" se quedan al final.
+        for old in chats where !merged.contains(where: { $0.title == old.title || (!old.chatID.isEmpty && $0.chatID == old.chatID) }) {
+            merged.append(old)
+        }
+        chats = merged
+        save()
+    }
+
+    /// Cada vez que se abre una conversación en Pockit (todas son del proyecto: no hay otra forma de llegar).
+    func visited(chatID: String, title: String?) {
+        guard chatID.count >= 20 else { return }
+        let clean = (title ?? "")
+            .replacingOccurrences(of: " - Claude", with: "")
+            .replacingOccurrences(of: " | Claude", with: "")
+            .trimmingCharacters(in: .whitespaces)
+        let isPlaceholder = clean.isEmpty || clean == "Claude" || clean.lowercased().hasPrefix("new chat") || clean.lowercased().hasPrefix("nueva")
+        if let i = chats.firstIndex(where: { $0.chatID == chatID }) {
+            var c = chats.remove(at: i)
+            if !isPlaceholder { c.title = clean }
+            c.lastSeen = Date()
+            chats.insert(c, at: 0)
+        } else if let i = chats.firstIndex(where: { $0.chatID.isEmpty && !isPlaceholder && $0.title == clean }) {
+            var c = chats.remove(at: i)
+            c.chatID = chatID
+            c.lastSeen = Date()
+            chats.insert(c, at: 0)
+        } else {
+            chats.insert(ProjectChat(chatID: chatID, title: isPlaceholder ? "…" : clean, when: ""), at: 0)
+        }
+        save()
     }
 }
 
@@ -138,7 +105,6 @@ struct ChatsDrawer: View {
             .animation(.interactiveSpring(response: 0.32, dampingFraction: 0.86), value: isOpen)
             .animation(.interactiveSpring(response: 0.25, dampingFraction: 0.9), value: drag)
         }
-        .onChange(of: isOpen) { _, open in if open { chats.refresh() } }
     }
 
     private func panel(width: CGFloat) -> some View {
@@ -182,16 +148,18 @@ struct ChatsDrawer: View {
             ScrollView {
                 LazyVStack(alignment: .leading, spacing: 2) {
                     if list.isEmpty {
-                        Text(chats.loading ? t.s("Cargando…", "Loading…")
-                             : chats.failed ? t.s("No pude cargar la lista. Deslizá pa' abajo pa' reintentar.", "Couldn't load the list. Pull down to retry.")
-                             : t.s("No hay conversaciones.", "No chats yet."))
+                        Text(query.isEmpty
+                             ? t.s("Todavía no hay conversaciones. Se llena cuando abrís la pantalla de conversación nueva o hablás con Marisol.", "No chats yet. It fills in from the new-chat screen and as you talk to Marisol.")
+                             : t.s("No encontré nada.", "No matches."))
                             .font(Theme.text(14)).foregroundStyle(Theme.lilac)
                             .padding(18)
                     }
                     ForEach(list) { chat in
-                        let current = web.currentPath.hasPrefix(chat.path)
+                        let current = !chat.chatID.isEmpty && web.currentPath.hasPrefix(chat.path)
                         Button {
-                            if !current { web.open(path: chat.path) }
+                            if !current {
+                                if chat.chatID.isEmpty { web.openProjectChat(title: chat.title) } else { web.open(path: chat.path) }
+                            }
                             isOpen = false
                         } label: {
                             VStack(alignment: .leading, spacing: 2) {
@@ -214,10 +182,6 @@ struct ChatsDrawer: View {
                 .padding(.horizontal, 8)
                 .padding(.top, 10)
                 .padding(.bottom, 24)
-            }
-            .refreshable { chats.refresh(minAge: 0) }
-            .overlay(alignment: .top) {
-                if chats.loading && !list.isEmpty { ProgressView().tint(Theme.switchPink).padding(.top, 4) }
             }
         }
         .frame(maxHeight: .infinity, alignment: .top)

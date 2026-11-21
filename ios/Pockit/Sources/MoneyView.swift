@@ -39,8 +39,8 @@ struct MoneyView: View {
 
                     HStack(spacing: 10) {
                         MoneyTile(symbol: "building.columns.fill", title: t.s("Banco", "Bank"), value: current?.bank, delta: previous.map { (current?.bank ?? 0) - $0.bank })
-                        MoneyTile(symbol: "iphone", title: "App", value: current?.app, delta: previous.map { (current?.app ?? 0) - $0.app })
-                        MoneyTile(symbol: "house.fill", title: t.s("Casa", "Home"), value: current?.home, delta: previous.map { (current?.home ?? 0) - $0.home })
+                        MoneyTile(symbol: "iphone", title: "BUCKME", value: current?.app, delta: previous.map { (current?.app ?? 0) - $0.app })
+                        MoneyTile(symbol: "house.fill", title: "STASH", value: current?.home, delta: previous.map { (current?.home ?? 0) - $0.home })
                     }
                     .listRowBackground(Color.clear)
                     .listRowInsets(EdgeInsets(top: 6, leading: 0, bottom: 6, trailing: 0))
@@ -112,7 +112,7 @@ struct MoneyView: View {
                             HStack {
                                 VStack(alignment: .leading, spacing: 2) {
                                     Text(Fmt.money(s.total)).font(Theme.text(16, .semibold)).foregroundStyle(.white)
-                                    Text("\(t.s("Banco", "Bank")) \(Fmt.money(s.bank)) · App \(Fmt.money(s.app)) · \(t.s("Casa", "Home")) \(Fmt.money(s.home))")
+                                    Text("\(t.s("Banco", "Bank")) \(Fmt.money(s.bank)) · BUCKME \(Fmt.money(s.app)) · STASH \(Fmt.money(s.home))")
                                         .font(Theme.text(11, relativeTo: .caption2)).foregroundStyle(Theme.lilac)
                                 }
                                 Spacer()
@@ -211,8 +211,8 @@ struct MoneyEditSheet: View {
             Form {
                 Section {
                     field(t.s("Banco", "Bank"), symbol: "building.columns.fill", text: $bank)
-                    field("App", symbol: "iphone", text: $app)
-                    field(t.s("Casa", "Home"), symbol: "house.fill", text: $home)
+                    field("BUCKME", symbol: "iphone", text: $app)
+                    field("STASH", symbol: "house.fill", text: $home)
                 } header: {
                     SectionTitle(text: t.s("¿Cuánto tenés?", "How much do you have?"))
                 } footer: {

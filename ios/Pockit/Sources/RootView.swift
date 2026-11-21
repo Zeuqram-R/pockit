@@ -66,14 +66,6 @@ struct RootView: View {
                     .zIndex(2)
             }
 
-            // WebView escondida que lee la lista de conversaciones del proyecto.
-            WebContainer(webView: chats.webView)
-                .frame(width: 360, height: 640)
-                .opacity(0.001)
-                .offset(x: -5000)
-                .allowsHitTesting(false)
-                .accessibilityHidden(true)
-
             if state.tab == .marisol {
                 ChatsDrawer(isOpen: $showChats)
                     .zIndex(1.5)
@@ -119,6 +111,8 @@ struct RootView: View {
         .onAppear {
             state.onEvent = { tag in store.ingest(tag) }
             web.onTags = { items in state.handle(items: items) }
+            web.onProjectChats = { items in chats.ingestFromProjectPage(items) }
+            web.onChatVisited = { id, title in chats.visited(chatID: id, title: title) }
             web.setPrefix(state.prefix(lang: settings.language))
             skin.attach(web)
         }

@@ -108,7 +108,7 @@ struct MiPartidaView: View {
             lines.append(t.s("La anoté \(Fmt.relative(last.at, lang: .es))", "Logged \(Fmt.relative(last.at, lang: .en))"))
         }
         if let m = store.currentMoney {
-            lines.append("Money: \(t.s("banco", "bank")) \(Fmt.money(m.bank)), app \(Fmt.money(m.app)), \(t.s("casa", "home")) \(Fmt.money(m.home))")
+            lines.append("Money: \(t.s("banco", "bank")) \(Fmt.money(m.bank)), BUCKME \(Fmt.money(m.app)), STASH \(Fmt.money(m.home))")
         }
         let open = store.openPendientes.prefix(5).map(\.text)
         if !open.isEmpty { lines.append(t.s("Pendientes abiertos: ", "Open to-dos: ") + open.joined(separator: "; ")) }
