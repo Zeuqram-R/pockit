@@ -104,7 +104,6 @@ final class AvatarPlayer: ObservableObject {
                 Task { @MainActor in self?.finish(target) }
             }
             player.replaceCurrentItem(with: item)
-            player.seek(to: .zero)
             player.playImmediately(atRate: 1.8)
         }
     }
