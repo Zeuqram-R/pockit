@@ -14,11 +14,15 @@ struct QuickBar: View {
             HStack(spacing: 8) {
                 chip("📍 " + t.qProgress, color: Theme.pink) { showProgress = true }
                 chip(t.qWhatNow, color: Theme.coral) { web.send(t.msgWhatNow) }
-                chip(t.qHint, color: Theme.teal) { web.send(t.msgHint) }
-                chip(t.qTellMe, color: Theme.sunset) { web.send(t.msgTellMe) }
+                // Solo aparecen cuando Marisol está dando pistas de un secreto.
+                if state.hintsOpen {
+                    chip(t.qHint, color: Theme.teal) { web.send(t.msgHint) }
+                    chip(t.qTellMe, color: Theme.sunset) { web.send(t.msgTellMe) }
+                }
             }
             .padding(.horizontal, 12)
             .padding(.vertical, 8)
+            .animation(.easeOut(duration: 0.2), value: state.hintsOpen)
         }
         .background(Theme.night)
         .overlay(alignment: .bottom) {

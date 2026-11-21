@@ -10,6 +10,8 @@ enum Mood: String, CaseIterable {
 final class PockitState: ObservableObject {
     @Published var mood: Mood = .neutral
     @Published var lastReplyHadSpoiler = false
+    /// Marisol está dando pistas de un secreto: se muestran "Otra pista" y "Dime ya".
+    @Published var hintsOpen = false
 
     @AppStorage("pockit.spoilersOn") var spoilersOn = false {
         willSet { objectWillChange.send() }
@@ -51,6 +53,7 @@ final class PockitState: ObservableObject {
     func handle(items: [[String: Any]]) {
         var newestMood: Mood?
         var newestSpoiler: Bool?
+        var newestHints = false
         var changedSeen = false
 
         for (index, item) in items.enumerated() {
@@ -63,6 +66,7 @@ final class PockitState: ObservableObject {
                 // La cara y el aviso de spoiler siguen siempre a la respuesta más reciente en pantalla.
                 if isNewest, let m = tag["mood"], let mood = Mood(rawValue: m) { newestMood = mood }
                 if isNewest, let s = tag["spoiler"] { newestSpoiler = (s == "yes") }
+                if isNewest, tag["hints"] == "open" { newestHints = true }
                 guard isNew else { continue }
                 apply(tag)
             }
@@ -71,6 +75,7 @@ final class PockitState: ObservableObject {
 
         if let m = newestMood, m != mood { mood = m }
         if let s = newestSpoiler { lastReplyHadSpoiler = s }
+        if !items.isEmpty, newestHints != hintsOpen { hintsOpen = newestHints }
         if changedSeen {
             UserDefaults.standard.set(Array(seenKeys.suffix(2000)), forKey: seenKey)
         }

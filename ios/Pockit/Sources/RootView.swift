@@ -74,7 +74,7 @@ struct TopBar: View {
     var body: some View {
         let t = settings.t
         HStack(spacing: 10) {
-            AvatarView(mood: state.mood, size: 46, spoilerDot: state.lastReplyHadSpoiler)
+            AvatarView(mood: state.mood, size: 52, spoilerDot: state.lastReplyHadSpoiler)
 
             VStack(alignment: .leading, spacing: 1) {
                 DisplayTitle(text: "MARISOL", size: 22)

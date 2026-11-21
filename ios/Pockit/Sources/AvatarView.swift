@@ -2,39 +2,41 @@ import SwiftUI
 import AVFoundation
 import UIKit
 
-/// Cara de Marisol en un círculo. Cuando cambia el mood, reproduce el clip actual→neutral
-/// y luego neutral→nuevo, pegados en una sola composición pa' que no haya cortes.
+/// Cara de Marisol en un círculo. Al cambiar de mood: clip actual→neutral y, mientras ella
+/// está en neutral, un fundido suave al clip neutral→nuevo (dos reproductores), sin cortes.
 struct AvatarView: View {
     let mood: Mood
-    var size: CGFloat = 46
+    var size: CGFloat = 52
     var spoilerDot = false
 
     @StateObject private var player = AvatarPlayer()
     @State private var breathe = false
 
-    /// Dónde queda la cara dentro del cuadro 9:16 (0 = arriba, 1 = abajo).
-    private let faceCenterY: CGFloat = 0.41
-    private let zoom: CGFloat = 2.3
+    /// Encuadre dentro del cuadro 9:16: centro de la cabeza y cuánto se agranda.
+    static let faceCenterY: CGFloat = 0.38
+    static let zoom: CGFloat = 1.0
 
     var body: some View {
-        let videoW = size * zoom
+        let videoW = size * Self.zoom
         let videoH = videoW * 16 / 9
-        let offsetY = size / 2 - faceCenterY * videoH
+        let offsetY = videoH * (0.5 - Self.faceCenterY)
 
         ZStack {
             Image(uiImage: AvatarPlayer.still(player.stillMood))
                 .resizable()
                 .frame(width: videoW, height: videoH)
-                .offset(y: offsetY + (videoH - size) / 2)
-            PlayerLayerView(player: player.player)
+            PlayerLayerView(player: player.playerA)
                 .frame(width: videoW, height: videoH)
-                .offset(y: offsetY + (videoH - size) / 2)
-                .opacity(player.isPlaying ? 1 : 0)
+                .opacity(player.opacityA)
+            PlayerLayerView(player: player.playerB)
+                .frame(width: videoW, height: videoH)
+                .opacity(player.opacityB)
         }
+        .offset(y: offsetY)
         .frame(width: size, height: size)
         .clipShape(Circle())
         .overlay(Circle().stroke(Theme.hot, lineWidth: 2))
-        .scaleEffect(breathe ? 1.025 : 1.0)
+        .scaleEffect(breathe ? 1.02 : 1.0)
         .overlay(alignment: .bottomTrailing) {
             if spoilerDot {
                 Circle().fill(Theme.sunset)
@@ -44,7 +46,7 @@ struct AvatarView: View {
         }
         .onAppear {
             player.show(mood, animated: false)
-            withAnimation(.easeInOut(duration: 2.6).repeatForever(autoreverses: true)) { breathe = true }
+            withAnimation(.easeInOut(duration: 2.8).repeatForever(autoreverses: true)) { breathe = true }
         }
         .onChange(of: mood) { _, newMood in player.show(newMood, animated: true) }
         .accessibilityLabel("Marisol, \(mood.rawValue)")
@@ -53,18 +55,30 @@ struct AvatarView: View {
 
 @MainActor
 final class AvatarPlayer: ObservableObject {
-    let player = AVPlayer()
+    let playerA = AVPlayer()
+    let playerB = AVPlayer()
     @Published private(set) var stillMood: Mood = .neutral
-    @Published private(set) var isPlaying = false
+    @Published private(set) var opacityA: Double = 0
+    @Published private(set) var opacityB: Double = 0
 
+    /// Velocidad de los clips (1 = normal).
+    private let rate: Float = 1.25
+    /// Punto del primer clip donde ella ya quedó en neutral y arranca el segundo.
+    private let handoff = 0.74
+    private let fade = 0.45
+
+    private var busy = false
     private var current: Mood = .neutral
     private var pending: Mood?
-    private var endObserver: NSObjectProtocol?
+    private var timeObservers: [(AVPlayer, Any)] = []
+    private var endObservers: [NSObjectProtocol] = []
 
     init() {
-        player.isMuted = true
-        player.actionAtItemEnd = .pause
-        player.preventsDisplaySleepDuringVideoPlayback = false
+        for p in [playerA, playerB] {
+            p.isMuted = true
+            p.actionAtItemEnd = .pause
+            p.preventsDisplaySleepDuringVideoPlayback = false
+        }
     }
 
     static func still(_ mood: Mood) -> UIImage {
@@ -83,56 +97,92 @@ final class AvatarPlayer: ObservableObject {
             stillMood = mood
             return
         }
-        if isPlaying { pending = mood; return }
+        if busy { pending = mood; return }
         guard mood != current else { return }
 
-        var urls: [URL] = []
-        if current != .neutral, let u = Self.clip(current, .neutral) { urls.append(u) }
-        if mood != .neutral, let u = Self.clip(.neutral, mood) { urls.append(u) }
+        let first = current != .neutral ? Self.clip(current, .neutral) : nil
+        let second = mood != .neutral ? Self.clip(.neutral, mood) : nil
         let target = mood
-        guard !urls.isEmpty else { current = target; stillMood = target; return }
+        busy = true
 
-        isPlaying = true
+        switch (first, second) {
+        case let (a?, b?):
+            play(a, on: playerA, crossfade: false, handoffEarly: true) { [weak self] in
+                guard let self else { return }
+                self.play(b, on: self.playerB, crossfade: true, handoffEarly: false) { [weak self] in
+                    self?.finish(target)
+                }
+            }
+        case let (a?, nil):
+            play(a, on: playerA, crossfade: false, handoffEarly: false) { [weak self] in self?.finish(target) }
+        case let (nil, b?):
+            play(b, on: playerB, crossfade: false, handoffEarly: false) { [weak self] in self?.finish(target) }
+        default:
+            finish(target)
+        }
+    }
+
+    /// Reproduce un clip. `then` se llama en el punto de relevo (o casi al final) pa' encadenar lo siguiente.
+    private func play(_ url: URL, on player: AVPlayer, crossfade: Bool, handoffEarly: Bool,
+                      then: @escaping @MainActor () -> Void) {
+        let item = AVPlayerItem(url: url)
+        player.replaceCurrentItem(with: item)
+        var fired = false
+        let fire: @MainActor () -> Void = {
+            guard !fired else { return }
+            fired = true
+            then()
+        }
+
         Task {
-            guard let item = await Self.composedItem(urls) else {
-                finish(target)
-                return
+            let duration = (try? await item.asset.load(.duration)) ?? CMTime(seconds: 2.8, preferredTimescale: 600)
+            let cut = CMTimeMultiplyByFloat64(duration, multiplier: handoffEarly ? handoff : 0.97)
+            let boundary = player.addBoundaryTimeObserver(forTimes: [NSValue(time: cut)], queue: .main) {
+                Task { @MainActor in fire() }
             }
-            if let endObserver { NotificationCenter.default.removeObserver(endObserver) }
-            endObserver = NotificationCenter.default.addObserver(
-                forName: .AVPlayerItemDidPlayToEndTime, object: item, queue: .main) { [weak self] _ in
-                Task { @MainActor in self?.finish(target) }
+            timeObservers.append((player, boundary))
+            let end = NotificationCenter.default.addObserver(
+                forName: .AVPlayerItemDidPlayToEndTime, object: item, queue: .main) { _ in
+                Task { @MainActor in fire() }
             }
-            player.replaceCurrentItem(with: item)
-            player.playImmediately(atRate: 1.8)
+            endObservers.append(end)
+
+            player.playImmediately(atRate: rate)
+            let isA = player === playerA
+            if crossfade {
+                // Fundido del clip anterior al nuevo mientras los dos están en neutral.
+                withAnimation(.easeInOut(duration: fade)) {
+                    if isA { opacityA = 1; opacityB = 0 } else { opacityB = 1; opacityA = 0 }
+                }
+            } else {
+                // El primer cuadro es igual a la foto fija: aparece sin que se note.
+                if isA { opacityA = 1 } else { opacityB = 1 }
+            }
         }
     }
 
     private func finish(_ mood: Mood) {
         current = mood
         stillMood = mood
-        isPlaying = false
-        if let next = pending {
-            pending = nil
-            show(next, animated: true)
+        Task {
+            // Espera a que termine el clip: el último cuadro es igual a la foto fija.
+            try? await Task.sleep(for: .seconds(0.6))
+            opacityA = 0
+            opacityB = 0
+            clearObservers()
+            busy = false
+            if let next = pending {
+                pending = nil
+                show(next, animated: true)
+            }
         }
     }
 
-    private static func composedItem(_ urls: [URL]) async -> AVPlayerItem? {
-        let composition = AVMutableComposition()
-        guard let track = composition.addMutableTrack(withMediaType: .video,
-                                                      preferredTrackID: kCMPersistentTrackID_Invalid) else { return nil }
-        var cursor = CMTime.zero
-        for url in urls {
-            let asset = AVURLAsset(url: url)
-            guard let source = try? await asset.loadTracks(withMediaType: .video).first,
-                  let duration = try? await asset.load(.duration) else { continue }
-            do {
-                try track.insertTimeRange(CMTimeRange(start: .zero, duration: duration), of: source, at: cursor)
-                cursor = cursor + duration
-            } catch { continue }
-        }
-        return cursor == .zero ? nil : AVPlayerItem(asset: composition)
+    private func clearObservers() {
+        for (player, token) in timeObservers { player.removeTimeObserver(token) }
+        for token in endObservers { NotificationCenter.default.removeObserver(token) }
+        timeObservers.removeAll()
+        endObservers.removeAll()
     }
 }
 
