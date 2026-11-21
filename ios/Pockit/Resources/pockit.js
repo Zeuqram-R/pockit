@@ -187,7 +187,62 @@
     }
   }
 
+  // Spoilers que todavía se están escribiendo: se esconden desde que aparece ⟦spoiler
+  // (pa' que nunca se lean mientras Marisol escribe) y se van extendiendo hasta el cierre.
+  const pending = new Map();
+
+  function makeButton(id, title) {
+    const en = (window.__pockitPrefix || "").includes("lang:en");
+    const btn = document.createElement("button");
+    btn.type = "button";
+    btn.dataset.pockitToggle = id;
+    btn.textContent = "⚠️ SPOILER" + (title ? ": " + title : "") + (en ? " · tap to reveal" : " · tocá pa' ver");
+    btn.style.cssText = "display:block;width:100%;text-align:left;margin:12px 0;padding:12px 14px;" +
+      "border-radius:14px;border:1.5px solid #FFB547;background:rgba(255,181,71,0.12);" +
+      "color:#FFF4E6;font:600 15px -apple-system,system-ui,sans-serif;";
+    btn.addEventListener("click", (e) => {
+      e.preventDefault();
+      e.stopPropagation();
+      const open = btn.dataset.open === "1";
+      document.querySelectorAll('[data-pockit-spoiler="' + id + '"]').forEach((b) => {
+        b.style.display = open ? "none" : "";
+      });
+      btn.dataset.open = open ? "0" : "1";
+      btn.style.opacity = open ? "1" : "0.7";
+    });
+    return btn;
+  }
+
+  function hideBlock(b, id, btn) {
+    stripText(b);
+    b.dataset.pockitSpoiler = id;
+    b.style.display = btn && btn.dataset.open === "1" ? "" : "none";
+  }
+
+  // Esconde bloques desde `el` hasta el cierre. Devuelve true si encontró el cierre.
+  function swallow(el, id, btn) {
+    let cur = el;
+    while (cur) {
+      if (cur.dataset && cur.dataset.pockitToggle) { cur = cur.nextElementSibling; continue; }
+      const closed = SPOILER_END.test(cur.textContent || "");
+      hideBlock(cur, id, btn);
+      pending.set(id, { last: cur, btn: btn });
+      if (closed) { pending.delete(id); return true; }
+      cur = cur.nextElementSibling;
+    }
+    return false;
+  }
+
   function processSpoilers() {
+    if (!document.body) return;
+    // 1) Los que siguen abiertos: re-limpiar el último bloque y tragar los nuevos.
+    for (const [id, p] of Array.from(pending)) {
+      if (!p.last.isConnected) { pending.delete(id); continue; }
+      if (SPOILER_END.test(p.last.textContent || "")) { hideBlock(p.last, id, p.btn); pending.delete(id); continue; }
+      hideBlock(p.last, id, p.btn);
+      if (p.last.nextElementSibling) swallow(p.last.nextElementSibling, id, p.btn);
+    }
+    // 2) Nuevos inicios.
     const walker = document.createTreeWalker(document.body, NodeFilter.SHOW_TEXT, {
       acceptNode: (n) => (n.nodeValue && SPOILER_START.test(n.nodeValue) && !isEditable(n))
         ? NodeFilter.FILTER_ACCEPT : NodeFilter.FILTER_REJECT
@@ -200,52 +255,24 @@
       if (!first || first.dataset.pockitSpoiler) continue;
       const m = startNode.nodeValue.match(SPOILER_START);
       // Si el bloque es un contenedor grande con texto antes del spoiler, no lo escondemos entero.
-      if (first.tagName === "DIV" && (first.innerText || "").indexOf(m ? m[0] : "⟦spoiler") > 20) continue;
+      if (first.tagName === "DIV" && (first.textContent || "").indexOf(m ? m[0] : "⟦spoiler") > 20) continue;
       let title = (m && m[1]) || "";
       if (!title) {
-        const sm = (first.innerText || "").match(/<summary>([\s\S]*?)<\/summary>/);
+        const sm = (first.textContent || "").match(/<summary>([\s\S]*?)<\/summary>/);
         if (sm) title = sm[1].replace(/⚠️|SPOILER:?/gi, "").trim();
       }
-      // Junta los bloques hasta el cierre. Si todavía no llega (está escribiendo), espera.
-      const blocks = [first];
-      let el = first;
-      let closed = SPOILER_END.test(first.innerText || "");
-      while (!closed && el.nextElementSibling) {
-        el = el.nextElementSibling;
-        blocks.push(el);
-        closed = SPOILER_END.test(el.innerText || "");
-      }
-      if (!closed) continue;
-
       const id = "s" + (++spoilerCount);
-      for (const b of blocks) {
-        stripText(b);
-        b.dataset.pockitSpoiler = id;
-        b.style.display = "none";
-      }
-      const en = (window.__pockitPrefix || "").includes("lang:en");
-      const btn = document.createElement("button");
-      btn.type = "button";
-      btn.dataset.pockitToggle = id;
-      btn.textContent = "⚠️ SPOILER" + (title ? ": " + title : "") + (en ? " · tap to reveal" : " · tocá pa' ver");
-      btn.style.cssText = "display:block;width:100%;text-align:left;margin:12px 0;padding:12px 14px;" +
-        "border-radius:14px;border:1.5px solid #FFB547;background:rgba(255,181,71,0.12);" +
-        "color:#FFF4E6;font:600 15px -apple-system,system-ui,sans-serif;";
-      btn.addEventListener("click", (e) => {
-        e.preventDefault();
-        e.stopPropagation();
-        const open = btn.dataset.open === "1";
-        document.querySelectorAll('[data-pockit-spoiler="' + id + '"]').forEach((b) => {
-          b.style.display = open ? "none" : "";
-        });
-        btn.dataset.open = open ? "0" : "1";
-        btn.style.opacity = open ? "1" : "0.7";
-      });
+      const btn = makeButton(id, title);
       first.parentNode.insertBefore(btn, first);
+      swallow(first, id, btn);
     }
   }
 
+  // Texto de una etiqueta a medio escribir al final de un nodo (mientras Marisol escribe).
+  const PARTIAL_TAG_RE = /[ \t]*⟦[^⟧]*$/;
+
   function scan() {
+    if (!document.body) return;
     try { processSpoilers(); } catch (e) { post({ type: "log", message: "spoiler: " + e }); }
     const walker = document.createTreeWalker(document.body, NodeFilter.SHOW_TEXT, {
       acceptNode: (n) => (n.nodeValue && n.nodeValue.indexOf("⟦") !== -1 && !isEditable(n))
@@ -258,25 +285,27 @@
     const items = [];
     for (const n of nodes) {
       const value = n.nodeValue;
-      const found = [];
       let m;
       POCKIT_RE.lastIndex = 0;
-      while ((m = POCKIT_RE.exec(value))) found.push(parseAttrs(m[1]));
-      if (found.length) {
-        const ctx = (messageContainer(n).innerText || "").replace(ANY_TAG_RE, "").slice(0, 200);
-        const raw = (value.match(POCKIT_RE) || []).join(" ");
-        items.push({ key: hash(raw + "|" + ctx), tags: found });
+      const raws = [];
+      while ((m = POCKIT_RE.exec(value))) raws.push({ raw: m[0], attrs: parseAttrs(m[1]) });
+      if (raws.length) {
+        // Una etiqueta = un aviso, con su propia llave (así no se repite mientras el texto sigue llegando).
+        const ctx = (messageContainer(n).textContent || "").replace(ANY_TAG_RE, "").replace(PARTIAL_TAG_RE, "").slice(0, 200);
+        const msg = hash(ctx);
+        for (const r of raws) items.push({ key: hash(r.raw + "|" + ctx), msg: msg, tags: [r.attrs] });
       }
-      const cleaned = value.replace(ANY_TAG_RE, "");
+      const cleaned = value.replace(ANY_TAG_RE, "").replace(PARTIAL_TAG_RE, "");
       if (cleaned !== value) n.nodeValue = cleaned;
     }
     if (items.length) post({ type: "tags", items });
   }
 
+  // Revisa la página como máximo cada 60 ms (no espera a que Marisol termine de escribir).
   let timer = null;
   const schedule = () => {
-    clearTimeout(timer);
-    timer = setTimeout(scan, 700);
+    if (timer) return;
+    timer = setTimeout(() => { timer = null; scan(); }, 60);
   };
   new MutationObserver(schedule).observe(document.documentElement, {
     childList: true, subtree: true, characterData: true

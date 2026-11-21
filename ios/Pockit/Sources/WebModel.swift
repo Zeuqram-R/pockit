@@ -14,6 +14,8 @@ final class WebModel: NSObject, ObservableObject {
     @Published var loadError = false
     /// Aviso corto cuando un botón rápido no pudo enviar.
     @Published var sendProblem: String?
+    /// Ruta abierta en claude.ai (pa' marcar la conversación actual en el panel).
+    @Published var currentPath = ""
 
     /// Lo llama el puente JS con las etiquetas de Marisol.
     var onTags: (@MainActor ([[String: Any]]) -> Void)?
@@ -21,6 +23,7 @@ final class WebModel: NSObject, ObservableObject {
 
     let webView: WKWebView
     private var progressObservation: NSKeyValueObservation?
+    private var urlObservation: NSKeyValueObservation?
 
     override init() {
         let config = WKWebViewConfiguration()
@@ -42,7 +45,8 @@ final class WebModel: NSObject, ObservableObject {
         webView.isOpaque = false
         webView.backgroundColor = UIColor(Theme.night)
         webView.scrollView.backgroundColor = UIColor(Theme.night)
-        webView.allowsBackForwardNavigationGestures = true
+        // El borde izquierdo abre el panel de conversaciones (no "atrás").
+        webView.allowsBackForwardNavigationGestures = false
         webView.scrollView.contentInsetAdjustmentBehavior = .automatic
 
         super.init()
@@ -52,6 +56,9 @@ final class WebModel: NSObject, ObservableObject {
         progressObservation = webView.observe(\.estimatedProgress, options: [.new]) { [weak self] wv, _ in
             Task { @MainActor in self?.progress = wv.estimatedProgress }
         }
+        urlObservation = webView.observe(\.url, options: [.new]) { [weak self] wv, _ in
+            Task { @MainActor in self?.currentPath = wv.url?.path ?? "" }
+        }
         // Inspectable desde Safari en la Mac: así se ajusta el skin si claude.ai cambia.
         if #available(iOS 16.4, *) { webView.isInspectable = true }
         loadHome()
@@ -60,6 +67,24 @@ final class WebModel: NSObject, ObservableObject {
     func loadHome() {
         loadError = false
         webView.load(URLRequest(url: Self.projectURL))
+    }
+
+    /// Abre una ruta de claude.ai sin recargar toda la página cuando se puede (navegación interna de la app web).
+    func open(path: String) {
+        loadError = false
+        let js = """
+        (function(p){
+          try {
+            if (window.next && window.next.router && typeof window.next.router.push === 'function') { window.next.router.push(p); return 'router'; }
+          } catch (e) {}
+          window.location.assign(p); return 'assign';
+        })(\(Self.jsString(path)))
+        """
+        webView.evaluateJavaScript(js) { [weak self] _, error in
+            if error != nil, let url = URL(string: "https://claude.ai" + path) {
+                Task { @MainActor in self?.webView.load(URLRequest(url: url)) }
+            }
+        }
     }
 
     func reload() {

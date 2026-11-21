@@ -12,6 +12,8 @@ struct RootView: View {
     @StateObject private var keyboard = KeyboardWatcher()
     @State private var showSettings = false
     @State private var showPartida = false
+    @State private var showChats = false
+    @EnvironmentObject private var chats: ProjectChats
     @State private var showLoading = true
 
     var body: some View {
@@ -22,9 +24,18 @@ struct RootView: View {
                 ZStack {
                     // El chat siempre vivo (la WebView no se recarga al cambiar de pestaña).
                     VStack(spacing: 0) {
-                        TopBar(onSettings: { showSettings = true }, onAvatar: { showPartida = true })
+                        TopBar(onSettings: { showSettings = true }, onAvatar: { showPartida = true }, onChats: { showChats = true })
                         QuickBar()
                         WebContainer(webView: web.webView)
+                            // Deslizar desde el borde izquierdo abre el panel de conversaciones.
+                            .overlay(alignment: .leading) {
+                                Color.clear
+                                    .frame(width: 16)
+                                    .contentShape(Rectangle())
+                                    .gesture(DragGesture(minimumDistance: 10).onEnded { v in
+                                        if v.translation.width > 40 { showChats = true }
+                                    })
+                            }
                     }
                     .opacity(state.tab == .marisol ? 1 : 0)
                     .allowsHitTesting(state.tab == .marisol)
@@ -55,6 +66,20 @@ struct RootView: View {
                     .zIndex(2)
             }
 
+            // WebView escondida que lee la lista de conversaciones del proyecto.
+            WebContainer(webView: chats.webView)
+                .frame(width: 360, height: 640)
+                .opacity(0.001)
+                .offset(x: -5000)
+                .allowsHitTesting(false)
+                .accessibilityHidden(true)
+
+            if state.tab == .marisol {
+                ChatsDrawer(isOpen: $showChats)
+                    .zIndex(1.5)
+                    .allowsHitTesting(showChats)
+            }
+
             // Avisos apilados: uno arriba del otro, cada uno se desvanece a los 3 s.
             VStack(spacing: 8) {
                 ForEach(store.notices) { n in
@@ -82,6 +107,7 @@ struct RootView: View {
                 .environmentObject(state)
                 .environmentObject(skin)
                 .environmentObject(store)
+                .environmentObject(chats)
         }
         .sheet(isPresented: $showPartida) {
             MiPartidaView()
@@ -115,6 +141,7 @@ struct RootView: View {
 struct TopBar: View {
     let onSettings: () -> Void
     let onAvatar: () -> Void
+    let onChats: () -> Void
     @EnvironmentObject private var settings: AppSettings
     @EnvironmentObject private var web: WebModel
     @EnvironmentObject private var state: PockitState
@@ -123,6 +150,14 @@ struct TopBar: View {
     var body: some View {
         let t = settings.t
         HStack(spacing: 10) {
+            Button(action: onChats) {
+                Image(systemName: "sidebar.left")
+                    .font(.system(size: 20, weight: .semibold))
+                    .foregroundStyle(.white)
+                    .frame(width: 34, height: 44)
+            }
+            .accessibilityLabel(t.s("Conversaciones", "Chats"))
+
             Button(action: onAvatar) {
                 AvatarView(mood: state.mood, size: 52, spoilerDot: state.lastReplyHadSpoiler)
             }
@@ -163,7 +198,7 @@ struct TopBar: View {
             }
             .accessibilityLabel(t.settings)
         }
-        .padding(.leading, 12)
+        .padding(.leading, 6)
         .padding(.trailing, 6)
         .padding(.vertical, 6)
         .background(Theme.night)

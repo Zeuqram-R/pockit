@@ -7,6 +7,7 @@ struct PockitApp: App {
     @StateObject private var state = PockitState()
     @StateObject private var skin = SkinManager()
     @StateObject private var store = PockitStore()
+    @StateObject private var chats = ProjectChats()
 
     init() { Theme.applyUIKitAppearance() }
 
@@ -18,6 +19,7 @@ struct PockitApp: App {
                 .environmentObject(state)
                 .environmentObject(skin)
                 .environmentObject(store)
+                .environmentObject(chats)
                 .preferredColorScheme(.dark)
                 .tint(Theme.switchPink)
                 .font(Theme.text(17))

@@ -109,10 +109,10 @@ final class SkinManager: ObservableObject {
           if (el.textContent !== css) el.textContent = css;
         })();
         """
-        var scripts = [WKUserScript(source: js, injectionTime: .atDocumentEnd, forMainFrameOnly: true)]
+        var scripts = [WKUserScript(source: js, injectionTime: .atDocumentStart, forMainFrameOnly: true)]
         if chatActive {
             let chat = chatJS
-            scripts.append(WKUserScript(source: chat, injectionTime: .atDocumentEnd, forMainFrameOnly: true))
+            scripts.append(WKUserScript(source: chat, injectionTime: .atDocumentStart, forMainFrameOnly: true))
             web.setExtraScripts(scripts)
             web.run(js)
             web.run(chat)

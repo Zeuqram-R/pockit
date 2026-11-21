@@ -60,10 +60,12 @@ final class PockitState: ObservableObject {
         var newestHints = false
         var changedSeen = false
 
+        // La respuesta más reciente es la del último elemento (cada etiqueta viene con el id de su mensaje).
+        let newestMsg = items.last?["msg"] as? String
         for (index, item) in items.enumerated() {
             guard let key = item["key"] as? String,
                   let tags = item["tags"] as? [[String: String]] else { continue }
-            let isNewest = index == items.count - 1
+            let isNewest = newestMsg != nil ? (item["msg"] as? String) == newestMsg : index == items.count - 1
             let isNew = !seenKeys.contains(key)
 
             for tag in tags {
