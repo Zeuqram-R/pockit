@@ -118,9 +118,10 @@ struct ChatsDrawer: View {
     var body: some View {
         GeometryReader { geo in
             let width = min(geo.size.width * 0.84, 360)
-            let offset = isOpen ? min(0, drag) : -width
+            let offset: CGFloat = isOpen ? min(0, drag) : -width
+            let dim: Double = isOpen ? 0.45 * Double(1 + offset / width) : 0
             ZStack(alignment: .leading) {
-                Color.black.opacity(isOpen ? 0.45 * (1 + offset / width) : 0)
+                Color.black.opacity(dim)
                     .ignoresSafeArea()
                     .onTapGesture { isOpen = false }
                     .allowsHitTesting(isOpen)
