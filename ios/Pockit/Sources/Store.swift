@@ -85,7 +85,8 @@ struct StoreNotice: Identifiable, Equatable {
 @MainActor
 final class PockitStore: ObservableObject {
     @Published private(set) var data = PockitData()
-    @Published var notice: StoreNotice?
+    /// Avisos en pantalla (se apilan; cada uno se va solo a los 3 s).
+    @Published var notices: [StoreNotice] = []
     /// Mientras se importa events.json no se muestran avisos.
     private var quiet = false
 
@@ -161,8 +162,11 @@ final class PockitStore: ObservableObject {
 
     private func announce(_ emoji: String, lang text: String) {
         guard !quiet else { return }
-        notice = StoreNotice(emoji: emoji, text: text)
+        notices.append(StoreNotice(emoji: emoji, text: text))
+        if notices.count > 4 { notices.removeFirst(notices.count - 4) }
     }
+
+    func dismissNotice(_ id: UUID) { notices.removeAll { $0.id == id } }
 
     static func number(_ s: String) -> Int? {
         let lower = s.lowercased()

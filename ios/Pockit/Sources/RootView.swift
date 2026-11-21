@@ -55,14 +55,17 @@ struct RootView: View {
                     .zIndex(2)
             }
 
-            if let n = store.notice {
-                NoticeCard(notice: n) { if store.notice == n { store.notice = nil } }
-                    .id(n.id)
-                    .frame(maxHeight: .infinity, alignment: .bottom)
-                    .padding(.bottom, keyboard.visible ? 12 : 86)
-                    .transition(.move(edge: .bottom).combined(with: .opacity))
-                    .zIndex(2)
+            // Avisos apilados: uno arriba del otro, cada uno se desvanece a los 3 s.
+            VStack(spacing: 8) {
+                ForEach(store.notices) { n in
+                    NoticeCard(notice: n) { store.dismissNotice(n.id) }
+                        .transition(.asymmetric(insertion: .move(edge: .bottom).combined(with: .opacity), removal: .opacity))
+                }
             }
+            .frame(maxHeight: .infinity, alignment: .bottom)
+            .padding(.bottom, keyboard.visible ? 12 : 86)
+            .allowsHitTesting(!store.notices.isEmpty)
+            .zIndex(2)
 
             if showLoading {
                 LoadingView()
@@ -71,7 +74,7 @@ struct RootView: View {
             }
         }
         .animation(.easeOut(duration: 0.25), value: web.sendProblem)
-        .animation(.spring(duration: 0.35), value: store.notice)
+        .animation(.easeInOut(duration: 0.4), value: store.notices)
         .sheet(isPresented: $showSettings) {
             SettingsView()
                 .environmentObject(settings)
