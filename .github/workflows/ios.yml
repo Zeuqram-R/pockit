@@ -1,0 +1,64 @@
+name: App de iPhone
+
+on:
+  push:
+    branches: [main]
+    paths: ['ios/**', '.github/workflows/ios.yml']
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: ios
+  cancel-in-progress: true
+
+jobs:
+  ipa:
+    runs-on: macos-15
+    timeout-minutes: 40
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Proyecto de Xcode
+        run: |
+          brew install xcodegen
+          cd ios
+          sed -i '' "s/CURRENT_PROJECT_VERSION: \"1\"/CURRENT_PROJECT_VERSION: \"${GITHUB_RUN_NUMBER}\"/" project.yml
+          xcodegen generate
+          xcodebuild -version
+
+      - name: Compilar (sin firmar)
+        run: |
+          set -o pipefail
+          cd ios
+          xcodebuild -project Pockit.xcodeproj -scheme Pockit -configuration Release \
+            -sdk iphoneos -destination 'generic/platform=iOS' -derivedDataPath build \
+            CODE_SIGNING_ALLOWED=NO CODE_SIGNING_REQUIRED=NO CODE_SIGN_IDENTITY="" \
+            build 2>&1 | tee build.log | grep -E "error:|warning:|BUILD" || true
+          test -d build/Build/Products/Release-iphoneos/Pockit.app || {
+            grep -E "error:" build.log | sort -u | head -40 | while IFS= read -r l; do echo "::error::$l"; done
+            exit 1
+          }
+
+      - name: Armar .ipa
+        run: |
+          cd ios
+          VER=$(grep -E '^ *MARKETING_VERSION:' project.yml | head -1 | sed -E 's/.*"(.*)".*/\1/')
+          # GitHub no deja paréntesis en el nombre del archivo: se baja como Pockit_0.1-6.ipa y en la página sale como Pockit_0.1(6).ipa.
+          NOMBRE="Pockit_${VER}-${GITHUB_RUN_NUMBER}.ipa"
+          echo "ETIQUETA=Pockit_${VER}(${GITHUB_RUN_NUMBER}).ipa" >> "$GITHUB_ENV"
+          echo "NOMBRE=$NOMBRE" >> "$GITHUB_ENV"
+          echo "VER=$VER" >> "$GITHUB_ENV"
+          mkdir -p Payload
+          cp -R build/Build/Products/Release-iphoneos/Pockit.app Payload/
+          zip -qry "$NOMBRE" Payload
+          ls -lh "$NOMBRE"
+
+      - name: Publicar
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          TAG="ios-${GITHUB_RUN_NUMBER}"
+          gh release create "$TAG" "ios/$NOMBRE#$ETIQUETA" --title "Pockit ${VER} (${GITHUB_RUN_NUMBER})" \
+            --notes "Instalar con Signulous. Commit ${GITHUB_SHA::7}." --latest

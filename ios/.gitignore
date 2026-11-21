@@ -1,0 +1,6 @@
+Pockit.xcodeproj/
+Pockit/Info.plist
+build/
+build.log
+Payload/
+*.ipa
