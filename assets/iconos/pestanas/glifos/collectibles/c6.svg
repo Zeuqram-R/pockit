@@ -1,0 +1,6 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512">
+<defs><mask id="k"><rect width="512" height="512" fill="#fff"/>
+<path d="M256 226 L280 276 L334 282 L294 318 L306 372 L256 344 L206 372 L218 318 L178 282 L232 276 Z" fill="#000"/></mask></defs>
+<path d="M176 52 L230 52 L272 164 L218 186 Z M336 52 L282 52 L240 164 L294 186 Z" fill="COLOR"/>
+<g mask="url(#k)"><circle cx="256" cy="306" r="150" fill="COLOR"/></g>
+</svg>

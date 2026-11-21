@@ -1,0 +1,7 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512">
+<defs><mask id="k"><rect width="512" height="512" fill="#fff"/>
+<path d="M256 216 L278 262 L328 268 L292 302 L302 352 L256 328 L210 352 L220 302 L184 268 L234 262 Z" fill="#000"/></mask></defs>
+<rect x="72" y="80" width="230" height="320" rx="28" fill="none" stroke="COLOR" stroke-width="26" transform="rotate(-10 187 240)"/>
+<rect x="150" y="104" width="230" height="320" rx="28" fill="none" stroke="COLOR" stroke-width="26" opacity="0"/>
+<g mask="url(#k)"><rect x="150" y="128" width="250" height="340" rx="30" fill="COLOR" transform="rotate(6 275 298)"/></g>
+</svg>
