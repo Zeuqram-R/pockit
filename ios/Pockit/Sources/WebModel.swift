@@ -12,6 +12,12 @@ final class WebModel: NSObject, ObservableObject {
     @Published var progress: Double = 0
     @Published var hasLoadedOnce = false
     @Published var loadError = false
+    /// Aviso corto cuando un botón rápido no pudo enviar.
+    @Published var sendProblem: String?
+
+    /// Lo llama el puente JS con las etiquetas de Marisol.
+    var onTags: (@MainActor ([[String: Any]]) -> Void)?
+    private var prefix = ""
 
     let webView: WKWebView
     private var progressObservation: NSKeyValueObservation?
@@ -25,6 +31,13 @@ final class WebModel: NSObject, ObservableObject {
         config.applicationNameForUserAgent = "Version/18.0 Mobile/15E148 Safari/604.1"
         config.defaultWebpagePreferences.preferredContentMode = .mobile
 
+        let content = WKUserContentController()
+        if let url = Bundle.main.url(forResource: "pockit", withExtension: "js"),
+           let js = try? String(contentsOf: url, encoding: .utf8) {
+            content.addUserScript(WKUserScript(source: js, injectionTime: .atDocumentEnd, forMainFrameOnly: true))
+        }
+        config.userContentController = content
+
         webView = WKWebView(frame: .zero, configuration: config)
         webView.isOpaque = false
         webView.backgroundColor = UIColor(Theme.night)
@@ -33,6 +46,7 @@ final class WebModel: NSObject, ObservableObject {
         webView.scrollView.contentInsetAdjustmentBehavior = .automatic
 
         super.init()
+        content.add(WeakScriptHandler(self), name: "pockit")
         webView.navigationDelegate = self
         webView.uiDelegate = self
         progressObservation = webView.observe(\.estimatedProgress, options: [.new]) { [weak self] wv, _ in
@@ -70,6 +84,68 @@ final class WebModel: NSObject, ObservableObject {
         await store.removeData(ofTypes: types, modifiedSince: .distantPast)
         hasLoadedOnce = false
         loadHome()
+    }
+
+    // MARK: Puente con claude.ai
+
+    /// Prefijo ⟦device⟧ ⟦lang⟧ que va al inicio de cada mensaje.
+    func setPrefix(_ value: String) {
+        prefix = value
+        let script = "window.__pockitPrefix = \(Self.jsString(value));"
+        let ucc = webView.configuration.userContentController
+        ucc.removeAllUserScripts()
+        ucc.addUserScript(WKUserScript(source: script, injectionTime: .atDocumentStart, forMainFrameOnly: true))
+        if let url = Bundle.main.url(forResource: "pockit", withExtension: "js"),
+           let js = try? String(contentsOf: url, encoding: .utf8) {
+            ucc.addUserScript(WKUserScript(source: js, injectionTime: .atDocumentEnd, forMainFrameOnly: true))
+        }
+        extraScripts.forEach { ucc.addUserScript($0) }
+        webView.evaluateJavaScript(script)
+    }
+
+    /// Scripts extra (el skin) que se mantienen aunque cambie el prefijo.
+    private var extraScripts: [WKUserScript] = []
+    func setExtraScripts(_ scripts: [WKUserScript]) {
+        extraScripts = scripts
+        setPrefix(prefix)
+    }
+
+    /// Escribe y envía un mensaje en el chat (botones rápidos).
+    func send(_ text: String) {
+        sendProblem = nil
+        webView.evaluateJavaScript("window.pockitSend && window.pockitSend(\(Self.jsString(text)))")
+    }
+
+    func run(_ js: String) {
+        webView.evaluateJavaScript(js)
+    }
+
+    /// Devuelve las variables de color que usa claude.ai (pa' ajustar el skin).
+    func diagnose() async -> String {
+        do {
+            let result = try await webView.evaluateJavaScript("window.pockitDiagnose ? window.pockitDiagnose() : 'sin puente'")
+            return (result as? String) ?? "sin resultado"
+        } catch {
+            return "error: \(error.localizedDescription)"
+        }
+    }
+
+    static func jsString(_ s: String) -> String {
+        let data = (try? JSONSerialization.data(withJSONObject: [s])) ?? Data("[\"\"]".utf8)
+        let arr = String(data: data, encoding: .utf8) ?? "[\"\"]"
+        return String(arr.dropFirst().dropLast())
+    }
+
+    fileprivate func receive(_ body: Any) {
+        guard let dict = body as? [String: Any], let type = dict["type"] as? String else { return }
+        switch type {
+        case "tags":
+            if let items = dict["items"] as? [[String: Any]] { onTags?(items) }
+        case "sendResult":
+            if (dict["ok"] as? Bool) == false { sendProblem = dict["reason"] as? String ?? "?" }
+        default:
+            break
+        }
     }
 
     static func isAllowed(_ host: String) -> Bool {
@@ -133,5 +209,16 @@ extension WebModel: WKUIDelegate {
             }
         }
         return nil
+    }
+}
+
+/// Evita el ciclo de retención entre WKUserContentController y WebModel.
+@MainActor
+private final class WeakScriptHandler: NSObject, WKScriptMessageHandler {
+    weak var target: WebModel?
+    init(_ target: WebModel) { self.target = target }
+
+    func userContentController(_ controller: WKUserContentController, didReceive message: WKScriptMessage) {
+        target?.receive(message.body)
     }
 }

@@ -4,7 +4,9 @@ import UIKit
 struct SettingsView: View {
     @EnvironmentObject private var settings: AppSettings
     @EnvironmentObject private var web: WebModel
+    @EnvironmentObject private var skin: SkinManager
     @Environment(\.dismiss) private var dismiss
+    @State private var diagnoseDone = false
     @State private var confirmSignOut = false
     @State private var linkError = false
 
@@ -36,6 +38,29 @@ struct SettingsView: View {
                     Text(t.icon)
                 } footer: {
                     Text(t.iconFooter)
+                }
+
+                Section {
+                    Toggle(t.skinToggle, isOn: Binding(
+                        get: { skin.localEnabled },
+                        set: { skin.localEnabled = $0 }))
+                    if skin.remoteSaysOff {
+                        Label(t.skinRemoteOff, systemImage: "exclamationmark.triangle")
+                            .foregroundStyle(Theme.sunset)
+                    }
+                    LabeledContent(t.skinStatus, value: skin.lastStatus.isEmpty ? "…" : skin.lastStatus)
+                    Button {
+                        Task {
+                            UIPasteboard.general.string = await web.diagnose()
+                            diagnoseDone = true
+                        }
+                    } label: {
+                        Label(t.diagnose, systemImage: "stethoscope")
+                    }
+                } header: {
+                    Text(t.skin)
+                } footer: {
+                    Text(t.skinFooter)
                 }
 
                 Section {
@@ -85,6 +110,9 @@ struct SettingsView: View {
                 Button("OK", role: .cancel) {}
             } message: {
                 Text(settings.iconError ?? "")
+            }
+            .alert(t.diagnoseCopied, isPresented: $diagnoseDone) {
+                Button("OK", role: .cancel) {}
             }
             .alert(t.pasteLinkInvalid, isPresented: $linkError) {
                 Button("OK", role: .cancel) {}
