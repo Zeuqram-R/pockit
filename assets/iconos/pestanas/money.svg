@@ -59,6 +59,6 @@
   <line x1="218" y1="6" x2="218" y2="144" stroke="#FF9CC2" stroke-width="6" stroke-linecap="round"/>
 </g>
 <polygon points="60.0,190.0 318.0,112.0 426.0,222.0 426.0,326.0 168.0,404.0 60.0,294.0" fill="none" stroke="#0E0818" stroke-width="18" stroke-linejoin="round"/>
-<circle cx="200.0" cy="213.0" r="52" fill="#FFF4E6" stroke="#0E0818" stroke-width="12"/>
-<text x="200.0" y="241.0" text-anchor="middle" font-family="DejaVu Sans, Arial, sans-serif" font-weight="900" font-size="80" fill="#FF3E8A" stroke="#0E0818" stroke-width="6" paint-order="stroke">$</text>
+<circle cx="200.0" cy="213.0" r="36" fill="#FFF4E6" stroke="#0E0818" stroke-width="10"/>
+<text x="200.0" y="232.0" text-anchor="middle" font-family="DejaVu Sans, Arial, sans-serif" font-weight="900" font-size="54" fill="#FF3E8A" stroke="#0E0818" stroke-width="5" paint-order="stroke">$</text>
 </svg>
