@@ -43,18 +43,18 @@ struct LoadingView: View {
 
     private var bottomPanel: some View {
         VStack(spacing: 14) {
-            DisplayTitle(text: "POCKIT", size: 48)
+            DisplayTitle(text: "POCKIT", size: 54)
             if web.loadError {
                 Text(settings.t.loadFailed)
-                    .font(.subheadline)
+                    .font(Theme.text(15, .medium, relativeTo: .subheadline))
                     .foregroundStyle(Theme.lilac)
                     .multilineTextAlignment(.center)
                 Button(settings.t.retry) { web.loadHome() }
                     .buttonStyle(.borderedProminent)
-                    .tint(Theme.pink)
+                    .tint(Theme.switchPink)
             } else {
                 Text(settings.t.loading)
-                    .font(.subheadline)
+                    .font(Theme.text(15, .medium, relativeTo: .subheadline))
                     .foregroundStyle(Theme.lilac)
                 ProgressBar(value: max(0.06, web.progress))
                     .frame(width: 180, height: 6)
@@ -72,8 +72,8 @@ struct ProgressBar: View {
     var body: some View {
         GeometryReader { geo in
             ZStack(alignment: .leading) {
-                Capsule().fill(Color(hex: 0x3D2A55))
-                Capsule().fill(Theme.hot)
+                Capsule().fill(Theme.nightDeep)
+                Capsule().fill(Theme.switchPink)
                     .frame(width: geo.size.width * min(1, max(0, value)))
                     .animation(.easeOut(duration: 0.3), value: value)
             }

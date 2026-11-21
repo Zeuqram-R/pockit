@@ -7,6 +7,8 @@ struct PockitApp: App {
     @StateObject private var state = PockitState()
     @StateObject private var skin = SkinManager()
 
+    init() { Theme.applyUIKitAppearance() }
+
     var body: some Scene {
         WindowGroup {
             RootView()
@@ -15,7 +17,8 @@ struct PockitApp: App {
                 .environmentObject(state)
                 .environmentObject(skin)
                 .preferredColorScheme(.dark)
-                .tint(Theme.pink)
+                .tint(Theme.switchPink)
+                .font(Theme.text(17))
         }
     }
 }

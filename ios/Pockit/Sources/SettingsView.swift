@@ -21,10 +21,11 @@ struct SettingsView: View {
                         ForEach(AppLanguage.allCases) { Text($0.label).tag($0) }
                     }
                     .pickerStyle(.segmented)
+                    .menuRow()
                 } header: {
-                    Text(t.language)
+                    SectionTitle(text: t.language)
                 } footer: {
-                    Text(t.languageFooter)
+                    Text(t.languageFooter).font(Theme.text(13, relativeTo: .footnote)).foregroundStyle(Theme.lilac.opacity(0.85))
                 }
 
                 Section {
@@ -34,21 +35,26 @@ struct SettingsView: View {
                     }
                     .frame(maxWidth: .infinity)
                     .padding(.vertical, 6)
+                    .menuRow()
                 } header: {
-                    Text(t.icon)
+                    SectionTitle(text: t.icon)
                 } footer: {
-                    Text(t.iconFooter)
+                    Text(t.iconFooter).font(Theme.text(13, relativeTo: .footnote)).foregroundStyle(Theme.lilac.opacity(0.85))
                 }
 
                 Section {
                     Toggle(t.skinToggle, isOn: Binding(
                         get: { skin.localEnabled },
                         set: { skin.localEnabled = $0 }))
+                        .tint(Theme.switchPink)
+                        .menuRow()
                     if skin.remoteSaysOff {
                         Label(t.skinRemoteOff, systemImage: "exclamationmark.triangle")
                             .foregroundStyle(Theme.sunset)
+                            .menuRow()
                     }
                     LabeledContent(t.skinStatus, value: skin.lastStatus.isEmpty ? "…" : skin.lastStatus)
+                        .menuRow()
                     Button {
                         Task {
                             UIPasteboard.general.string = await web.diagnose()
@@ -57,10 +63,11 @@ struct SettingsView: View {
                     } label: {
                         Label(t.diagnose, systemImage: "stethoscope")
                     }
+                    .menuRow()
                 } header: {
-                    Text(t.skin)
+                    SectionTitle(text: t.skin)
                 } footer: {
-                    Text(t.skinFooter)
+                    Text(t.skinFooter).font(Theme.text(13, relativeTo: .footnote)).foregroundStyle(Theme.lilac.opacity(0.85))
                 }
 
                 Section {
@@ -70,33 +77,40 @@ struct SettingsView: View {
                     } label: {
                         Label(t.pasteLink, systemImage: "link")
                     }
+                    .menuRow()
                     Button {
                         web.loadHome(); dismiss()
                     } label: {
                         Label(t.goHome, systemImage: "house")
                     }
+                    .menuRow()
                     Button {
                         web.reload(); dismiss()
                     } label: {
                         Label(t.reload, systemImage: "arrow.clockwise")
                     }
+                    .menuRow()
                     Button(role: .destructive) {
                         confirmSignOut = true
                     } label: {
                         Label(t.signOut, systemImage: "rectangle.portrait.and.arrow.right")
                     }
+                    .menuRow()
                 } header: {
-                    Text(t.session)
+                    SectionTitle(text: t.session)
                 } footer: {
-                    Text(t.pasteLinkFooter)
+                    Text(t.pasteLinkFooter).font(Theme.text(13, relativeTo: .footnote)).foregroundStyle(Theme.lilac.opacity(0.85))
                 }
 
-                Section(t.about) {
+                Section {
                     LabeledContent(t.version, value: Self.versionString)
+                        .menuRow()
+                } header: {
+                    SectionTitle(text: t.about)
                 }
             }
             .scrollContentBackground(.hidden)
-            .background(Theme.night)
+            .background(Theme.menu.ignoresSafeArea())
             .navigationTitle(t.settings)
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
@@ -124,7 +138,7 @@ struct SettingsView: View {
                 Button(t.cancel, role: .cancel) {}
             }
         }
-        .presentationBackground(Theme.night)
+        .presentationBackground(Theme.nightDeep)
     }
 
     private func iconOption(_ choice: AppIconChoice, title: String) -> some View {
@@ -139,11 +153,11 @@ struct SettingsView: View {
                     .clipShape(RoundedRectangle(cornerRadius: 19, style: .continuous))
                     .overlay(
                         RoundedRectangle(cornerRadius: 19, style: .continuous)
-                            .stroke(selected ? Theme.pink : Color.clear, lineWidth: 3)
+                            .stroke(selected ? Theme.switchPink : Color.clear, lineWidth: 3)
                             .padding(-4))
                 Text(title)
-                    .font(.footnote)
-                    .foregroundStyle(selected ? Theme.cream : Theme.lilac)
+                    .font(Theme.text(13, selected ? .semibold : .regular, relativeTo: .footnote))
+                    .foregroundStyle(selected ? Color.white : Theme.lilac)
             }
         }
         .buttonStyle(.plain)

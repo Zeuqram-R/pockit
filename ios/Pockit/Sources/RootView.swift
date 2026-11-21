@@ -77,9 +77,9 @@ struct TopBar: View {
             AvatarView(mood: state.mood, size: 52, spoilerDot: state.lastReplyHadSpoiler)
 
             VStack(alignment: .leading, spacing: 1) {
-                DisplayTitle(text: "MARISOL", size: 22)
+                DisplayTitle(text: "MARISOL", size: 24)
                 Text(state.progressSummary ?? t.noProgressYet)
-                    .font(.caption)
+                    .font(Theme.text(12, .medium, relativeTo: .caption))
                     .foregroundStyle(Theme.lilac)
                     .lineLimit(1)
             }
@@ -93,8 +93,8 @@ struct TopBar: View {
                     Image(systemName: state.spoilersOn ? "eye.fill" : "eye.slash.fill")
                     Text(state.spoilersOn ? t.spoilersOn : t.spoilersOff)
                 }
-                .font(.caption.weight(.bold))
-                .foregroundStyle(state.spoilersOn ? Theme.night : Theme.cream)
+                .font(Theme.text(12, .semibold, relativeTo: .caption))
+                .foregroundStyle(state.spoilersOn ? Theme.nightDeep : .white)
                 .padding(.horizontal, 10)
                 .frame(minHeight: 30)
                 .background(Capsule().fill(state.spoilersOn ? Theme.sunset : Theme.purple))
@@ -135,8 +135,8 @@ struct SendProblemBanner: View {
         HStack(spacing: 10) {
             Image(systemName: "exclamationmark.bubble.fill").foregroundStyle(Theme.sunset)
             Text(settings.t.sendFailed)
-                .font(.footnote)
-                .foregroundStyle(Theme.cream)
+                .font(Theme.text(13, relativeTo: .footnote))
+                .foregroundStyle(.white)
             Spacer(minLength: 0)
             Button(action: onClose) {
                 Image(systemName: "xmark").foregroundStyle(Theme.lilac).frame(width: 32, height: 32)
@@ -145,7 +145,7 @@ struct SendProblemBanner: View {
         }
         .padding(12)
         .background(RoundedRectangle(cornerRadius: 14).fill(Theme.nightDeep))
-        .overlay(RoundedRectangle(cornerRadius: 14).stroke(Theme.purple, lineWidth: 1))
+        .overlay(RoundedRectangle(cornerRadius: 14).stroke(Theme.violet, lineWidth: 1))
         .padding(.horizontal, 16)
         .task {
             try? await Task.sleep(for: .seconds(5))

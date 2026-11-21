@@ -1,9 +1,16 @@
 import SwiftUI
+import UIKit
 
 enum Theme {
-    static let night = Color(hex: 0x1B1030)
-    static let nightDeep = Color(hex: 0x0E0818)
-    static let purple = Color(hex: 0x6B2D7B)
+    // Morados del menú de GTA VI (sacados de fotos de la tele).
+    static let night = Color(hex: 0x2B1E92)      // fondo base
+    static let nightDeep = Color(hex: 0x1A1066)  // lo más oscuro
+    static let panel = Color(hex: 0x3826A6)      // filas y paneles
+    static let purple = Color(hex: 0x4A2DB8)     // chips y botones
+    static let violet = Color(hex: 0x8248E3)     // brillo de arriba a la derecha
+    static let line = Color.white.opacity(0.14)  // divisores
+    /// Rosa de los switches, sliders y selección (con blanco), como en los ajustes del juego.
+    static let switchPink = Color(hex: 0xCB84F8)
     static let pink = Color(hex: 0xFF3E8A)
     static let coral = Color(hex: 0xFF7A45)
     static let sunset = Color(hex: 0xFFB547)
@@ -19,9 +26,59 @@ enum Theme {
         colors: [Color(hex: 0xFFC56B), coral, pink],
         startPoint: .top, endPoint: .bottom)
 
-    /// Anton, la letra de títulos. Si no carga, cae en la del sistema.
-    static func display(_ size: CGFloat) -> Font {
-        .custom("Anton-Regular", size: size)
+    /// Fondo de menú como el del juego: índigo abajo a la izquierda, violeta arriba a la derecha.
+    static let menu = LinearGradient(
+        colors: [Color(hex: 0x231783), Color(hex: 0x3E28AE), Color(hex: 0x4B2DBA), Color(hex: 0x8248E3)],
+        startPoint: .bottomLeading, endPoint: .topTrailing)
+
+    /// Títulos: Barlow Condensed (condensada en mayúsculas, como los menús de GTA VI).
+    static func display(_ size: CGFloat, weight: DisplayWeight = .bold) -> Font {
+        .custom(weight.rawValue, size: size, relativeTo: .title)
+    }
+
+    enum DisplayWeight: String {
+        case semibold = "BarlowCondensed-SemiBold"
+        case bold = "BarlowCondensed-Bold"
+    }
+
+    /// Texto: Figtree (sans geométrica, como el texto de los menús del juego).
+    static func text(_ size: CGFloat, _ weight: TextWeight = .regular, relativeTo style: Font.TextStyle = .body) -> Font {
+        .custom(weight.rawValue, size: size, relativeTo: style)
+    }
+
+    enum TextWeight: String {
+        case regular = "Figtree-Regular"
+        case medium = "Figtree-Medium"
+        case semibold = "Figtree-SemiBold"
+    }
+
+    /// Apariencia de UIKit (barra de navegación y control segmentado) con las letras y colores del juego.
+    @MainActor static func applyUIKitAppearance() {
+        let nav = UINavigationBarAppearance()
+        nav.configureWithTransparentBackground()
+        if let f = UIFont(name: DisplayWeight.bold.rawValue, size: 22) {
+            nav.titleTextAttributes = [.font: f, .foregroundColor: UIColor.white]
+        }
+        if let f = UIFont(name: DisplayWeight.bold.rawValue, size: 36) {
+            nav.largeTitleTextAttributes = [.font: f, .foregroundColor: UIColor.white]
+        }
+        if let f = UIFont(name: TextWeight.medium.rawValue, size: 17) {
+            let button = UIBarButtonItemAppearance()
+            button.normal.titleTextAttributes = [.font: f]
+            nav.buttonAppearance = button
+            nav.doneButtonAppearance = button
+        }
+        UINavigationBar.appearance().standardAppearance = nav
+        UINavigationBar.appearance().scrollEdgeAppearance = nav
+        UINavigationBar.appearance().compactAppearance = nav
+
+        let seg = UISegmentedControl.appearance()
+        seg.selectedSegmentTintColor = UIColor(switchPink)
+        seg.backgroundColor = UIColor(nightDeep).withAlphaComponent(0.6)
+        if let f = UIFont(name: TextWeight.semibold.rawValue, size: 14) {
+            seg.setTitleTextAttributes([.font: f, .foregroundColor: UIColor.white], for: .normal)
+            seg.setTitleTextAttributes([.font: f, .foregroundColor: UIColor.white], for: .selected)
+        }
     }
 }
 
@@ -36,18 +93,34 @@ extension Color {
     }
 }
 
-/// Título estilo Pockit: Anton inclinada, degradado sunset y contorno oscuro.
+/// Título estilo menú de GTA VI: Barlow Condensed en mayúsculas, blanco, con sombra suave.
 struct DisplayTitle: View {
     let text: String
     var size: CGFloat = 34
 
     var body: some View {
-        ZStack {
-            Text(text).font(Theme.display(size)).foregroundStyle(Theme.nightDeep).offset(x: 1.5, y: 1.5)
-            Text(text).font(Theme.display(size)).foregroundStyle(Theme.hot)
-        }
-        .transformEffect(CGAffineTransform(a: 1, b: 0, c: -0.12, d: 1, tx: 0, ty: 0))
-        .accessibilityElement(children: .ignore)
-        .accessibilityLabel(text)
+        Text(text.uppercased())
+            .font(Theme.display(size))
+            .foregroundStyle(.white)
+            .shadow(color: Theme.nightDeep.opacity(0.5), radius: 0, x: 1, y: 1.5)
+            .accessibilityLabel(text)
+    }
+}
+
+/// Encabezado de sección como en los ajustes del juego (COMBAT, MOVEMENT…).
+struct SectionTitle: View {
+    let text: String
+    var body: some View {
+        Text(text.uppercased())
+            .font(Theme.display(17, weight: .semibold))
+            .foregroundStyle(.white)
+    }
+}
+
+extension View {
+    /// Fila de formulario con el morado del menú del juego.
+    func menuRow() -> some View {
+        listRowBackground(Theme.panel.opacity(0.55))
+            .listRowSeparatorTint(Theme.line)
     }
 }

@@ -26,7 +26,7 @@ struct QuickBar: View {
         }
         .background(Theme.night)
         .overlay(alignment: .bottom) {
-            Rectangle().fill(Theme.purple.opacity(0.5)).frame(height: 1)
+            Rectangle().fill(Theme.line).frame(height: 1)
         }
         .sheet(isPresented: $showProgress) {
             ProgressSheet()
@@ -43,8 +43,8 @@ struct QuickBar: View {
             action()
         }) {
             Text(title)
-                .font(.subheadline.weight(.semibold))
-                .foregroundStyle(Theme.cream)
+                .font(Theme.text(15, .semibold, relativeTo: .subheadline))
+                .foregroundStyle(.white)
                 .padding(.horizontal, 14)
                 .frame(minHeight: 36)
                 .background(Capsule().fill(color.opacity(0.18)))
@@ -68,21 +68,28 @@ struct ProgressSheet: View {
         let t = settings.t
         NavigationStack {
             Form {
-                Section(t.progressPct) {
+                Section {
                     HStack {
                         Slider(value: $pct, in: 0...100, step: 1)
+                            .tint(Theme.switchPink)
                         Text("\(Int(pct))%")
-                            .font(.headline.monospacedDigit())
+                            .font(Theme.text(17, .semibold, relativeTo: .headline).monospacedDigit())
                             .frame(width: 52, alignment: .trailing)
                     }
+                    .menuRow()
+                } header: {
+                    SectionTitle(text: t.progressPct)
                 }
-                Section(t.progressMission) {
+                Section {
                     TextField(t.progressMissionPlaceholder, text: $mission)
                         .textInputAutocapitalization(.words)
+                        .menuRow()
+                } header: {
+                    SectionTitle(text: t.progressMission)
                 }
             }
             .scrollContentBackground(.hidden)
-            .background(Theme.night)
+            .background(Theme.menu.ignoresSafeArea())
             .navigationTitle("📍 " + t.qProgress)
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
@@ -102,7 +109,7 @@ struct ProgressSheet: View {
                 }
             }
         }
-        .presentationBackground(Theme.night)
+        .presentationBackground(Theme.nightDeep)
         .onAppear {
             pct = Double(max(0, state.progressPct))
             mission = state.progressMission
