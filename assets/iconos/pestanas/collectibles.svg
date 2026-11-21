@@ -1,0 +1,54 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="20 40 472 472" width="512" height="512">
+  <defs>
+    <linearGradient id="wood" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#9A47AE"/><stop offset="1" stop-color="#5E2670"/>
+    </linearGradient>
+    <linearGradient id="lid" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#7C3592"/><stop offset="1" stop-color="#9A47AE"/>
+    </linearGradient>
+    <linearGradient id="gold" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#FFE08A"/><stop offset="1" stop-color="#FFB547"/>
+    </linearGradient>
+    <radialGradient id="glow" cx="0.5" cy="0.6" r="0.6">
+      <stop offset="0" stop-color="#FFF4C2"/><stop offset="0.6" stop-color="#FFC56B"/><stop offset="1" stop-color="#FF7A45"/>
+    </radialGradient>
+    <radialGradient id="halo" cx="0.5" cy="0.5" r="0.5">
+      <stop offset="0" stop-color="#FFE08A" stop-opacity="0.75"/><stop offset="0.55" stop-color="#FF7A45" stop-opacity="0.28"/><stop offset="1" stop-color="#FF3E8A" stop-opacity="0"/>
+    </radialGradient>
+  </defs>
+
+  <!-- resplandor -->
+  <circle cx="256" cy="210" r="150" fill="url(#halo)"/>
+  <!-- tapa abierta -->
+  <path d="M120 236 L146 132 Q256 100 366 132 L392 236 Z" fill="#4A1B63" stroke="#0E0818" stroke-width="18" stroke-linejoin="round"/>
+  <path d="M176 126 L160 236" stroke="#0E0818" stroke-width="30"/>
+  <path d="M176 126 L160 236" stroke="#C98A2E" stroke-width="16"/>
+  <path d="M336 126 L352 236" stroke="#0E0818" stroke-width="30"/>
+  <path d="M336 126 L352 236" stroke="#C98A2E" stroke-width="16"/>
+
+  <!-- interior brillando -->
+  <path d="M116 236 L396 236 L380 262 L132 262 Z" fill="url(#glow)" stroke="#0E0818" stroke-width="14" stroke-linejoin="round"/>
+
+  <!-- tesoro asomando -->
+  <circle cx="200" cy="236" r="26" fill="url(#gold)" stroke="#0E0818" stroke-width="10"/>
+  <circle cx="246" cy="226" r="26" fill="url(#gold)" stroke="#0E0818" stroke-width="10"/>
+  <path d="M300 196 L330 222 L300 262 L270 222 Z" fill="#FF3E8A" stroke="#0E0818" stroke-width="10" stroke-linejoin="round"/>
+  <path d="M290 212 L300 202 L310 212" fill="none" stroke="#FFB3CF" stroke-width="6" stroke-linecap="round"/>
+
+  <!-- cuerpo del cofre -->
+  <rect x="100" y="252" width="312" height="176" rx="22" fill="url(#wood)" stroke="#0E0818" stroke-width="18"/>
+  <path d="M320 262 Q402 262 402 300 L402 418 L320 418 Z" fill="#4A1B63" opacity="0.4"/>
+  <rect x="100" y="252" width="312" height="34" fill="url(#gold)" stroke="#0E0818" stroke-width="14"/>
+  <rect x="146" y="252" width="30" height="176" fill="url(#gold)" stroke="#0E0818" stroke-width="12"/>
+  <rect x="336" y="252" width="30" height="176" fill="url(#gold)" stroke="#0E0818" stroke-width="12"/>
+
+  <!-- cerradura -->
+  <rect x="222" y="276" width="68" height="78" rx="14" fill="url(#gold)" stroke="#0E0818" stroke-width="12"/>
+  <circle cx="256" cy="306" r="10" fill="#0E0818"/>
+  <path d="M250 310 L262 310 L258 334 L254 334 Z" fill="#0E0818"/>
+
+  <!-- destellos -->
+  <path d="M96 150 L104 172 L126 180 L104 188 L96 210 L88 188 L66 180 L88 172 Z" fill="#FFE08A" stroke="#0E0818" stroke-width="6" stroke-linejoin="round"/>
+  <path d="M420 118 L427 138 L447 145 L427 152 L420 172 L413 152 L393 145 L413 138 Z" fill="#FF6FA6" stroke="#0E0818" stroke-width="6" stroke-linejoin="round"/>
+  <path d="M440 232 L444 244 L456 248 L444 252 L440 264 L436 252 L424 248 L436 244 Z" fill="#2EC4B6" stroke="#0E0818" stroke-width="5" stroke-linejoin="round"/>
+</svg>
