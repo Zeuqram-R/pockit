@@ -54,8 +54,13 @@ enum Theme {
 
     /// Apariencia de UIKit (barra de navegación y control segmentado) con las letras y colores del juego.
     @MainActor static func applyUIKitAppearance() {
+        // Arriba del todo (sin scroll) transparente; al bajar, barra morada con desenfoque
+        // pa' que el contenido no quede encima de "Ajustes" y "Listo".
         let nav = UINavigationBarAppearance()
-        nav.configureWithTransparentBackground()
+        nav.configureWithDefaultBackground()
+        nav.backgroundEffect = UIBlurEffect(style: .systemUltraThinMaterialDark)
+        nav.backgroundColor = UIColor(nightDeep).withAlphaComponent(0.9)
+        nav.shadowColor = UIColor.white.withAlphaComponent(0.12)
         if let f = UIFont(name: DisplayWeight.bold.rawValue, size: 22) {
             nav.titleTextAttributes = [.font: f, .foregroundColor: UIColor.white]
         }
@@ -68,9 +73,15 @@ enum Theme {
             nav.buttonAppearance = button
             nav.doneButtonAppearance = button
         }
+        let edge = nav.copy()
+        edge.configureWithTransparentBackground()
+        edge.titleTextAttributes = nav.titleTextAttributes
+        edge.largeTitleTextAttributes = nav.largeTitleTextAttributes
+        edge.buttonAppearance = nav.buttonAppearance
+        edge.doneButtonAppearance = nav.doneButtonAppearance
         UINavigationBar.appearance().standardAppearance = nav
-        UINavigationBar.appearance().scrollEdgeAppearance = nav
         UINavigationBar.appearance().compactAppearance = nav
+        UINavigationBar.appearance().scrollEdgeAppearance = edge
 
         let seg = UISegmentedControl.appearance()
         seg.selectedSegmentTintColor = UIColor(switchPink)

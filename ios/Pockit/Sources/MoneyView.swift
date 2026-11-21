@@ -9,6 +9,7 @@ struct MoneyView: View {
     @State private var editing = false
     @State private var confirmUnlock = false
     @State private var addingProp = false
+    @State private var showBuckme = false
 
     var body: some View {
         let t = settings.t
@@ -39,7 +40,11 @@ struct MoneyView: View {
 
                     HStack(spacing: 10) {
                         MoneyTile(symbol: "building.columns.fill", title: t.s("Banco", "Bank"), value: current?.bank, delta: previous.map { (current?.bank ?? 0) - $0.bank })
-                        MoneyTile(symbol: "iphone", title: "BUCKME", value: current?.app, delta: previous.map { (current?.app ?? 0) - $0.app })
+                        Button { showBuckme = true } label: {
+                            MoneyTile(symbol: "iphone", title: "BUCKME", value: current?.app, delta: previous.map { (current?.app ?? 0) - $0.app }, showsChevron: true)
+                        }
+                        .buttonStyle(.plain)
+                        .accessibilityHint(t.s("Abre el desglose de BUCKME", "Opens the BUCKME breakdown"))
                         MoneyTile(symbol: "house.fill", title: "STASH", value: current?.home, delta: previous.map { (current?.home ?? 0) - $0.home })
                     }
                     .listRowBackground(Color.clear)
@@ -152,6 +157,7 @@ struct MoneyView: View {
             }
             .sheet(isPresented: $editing) { MoneyEditSheet().presentationDetents([.medium, .large]) }
             .sheet(isPresented: $addingProp) { PropiedadSheet().presentationDetents([.medium]) }
+            .sheet(isPresented: $showBuckme) { BuckmeSheet().presentationDetents([.medium, .large]) }
         }
     }
 
@@ -178,10 +184,15 @@ struct MoneyTile: View {
     let title: String
     let value: Int?
     let delta: Int?
+    var showsChevron = false
 
     var body: some View {
         VStack(alignment: .leading, spacing: 6) {
-            Image(systemName: symbol).font(.system(size: 16, weight: .semibold)).foregroundStyle(Theme.switchPink)
+            HStack {
+                Image(systemName: symbol).font(.system(size: 16, weight: .semibold)).foregroundStyle(Theme.switchPink)
+                Spacer()
+                if showsChevron { Image(systemName: "chevron.right").font(.system(size: 12, weight: .bold)).foregroundStyle(Theme.lilac) }
+            }
             Text(title.uppercased()).font(Theme.display(13, weight: .semibold)).foregroundStyle(Theme.lilac)
             Text(value.map(Fmt.money) ?? "—")
                 .font(Theme.text(16, .semibold))
@@ -293,5 +304,85 @@ struct PropiedadSheet: View {
             }
         }
         .presentationBackground(Theme.nightDeep)
+    }
+}
+
+
+/// Desglose de BUCKME: cada cuenta con su nombre y monto (p. ej. Checking Account, Family Savings).
+struct BuckmeSheet: View {
+    @EnvironmentObject private var settings: AppSettings
+    @EnvironmentObject private var store: PockitStore
+    @Environment(\.dismiss) private var dismiss
+    @State private var accounts: [BuckmeAccount] = []
+    @State private var editing = false
+
+    var body: some View {
+        let t = settings.t
+        let total = accounts.reduce(0) { $0 + $1.amount }
+        NavigationStack {
+            List {
+                Section {
+                    VStack(alignment: .leading, spacing: 4) {
+                        Text("TOTAL").font(Theme.display(15, weight: .semibold)).foregroundStyle(Theme.lilac)
+                        Text(Fmt.money(total)).font(Theme.display(40)).foregroundStyle(.white)
+                    }
+                    .padding(.vertical, 4)
+                    .menuRow()
+                }
+                Section {
+                    if accounts.isEmpty {
+                        EmptyRow(symbol: "iphone", text: t.s("Agregá tus cuentas de BUCKME con +.", "Add your BUCKME accounts with +."))
+                    }
+                    ForEach($accounts) { $a in
+                        HStack {
+                            if editing {
+                                TextField(t.s("Nombre", "Name"), text: $a.name).font(Theme.text(16)).foregroundStyle(.white)
+                                Spacer()
+                                TextField("$0", value: $a.amount, format: .number)
+                                    .keyboardType(.numberPad)
+                                    .multilineTextAlignment(.trailing)
+                                    .font(Theme.text(16, .semibold))
+                                    .frame(maxWidth: 130)
+                            } else {
+                                Text(a.name).font(Theme.text(16)).foregroundStyle(.white)
+                                Spacer()
+                                Text(Fmt.money(a.amount)).font(Theme.text(16, .semibold)).foregroundStyle(.white)
+                            }
+                        }
+                        .menuRow()
+                    }
+                    .onDelete { accounts.remove(atOffsets: $0) }
+                    if editing {
+                        Button {
+                            accounts.append(BuckmeAccount(name: "", amount: 0))
+                        } label: { Label(t.s("Agregar cuenta", "Add account"), systemImage: "plus") }
+                        .menuRow()
+                    }
+                } header: {
+                    SectionTitle(text: t.s("Cuentas", "Accounts"))
+                } footer: {
+                    Text(t.s("El total de BUCKME en Money es la suma de estas cuentas.", "BUCKME's total in Money is the sum of these accounts."))
+                        .font(Theme.text(13, relativeTo: .footnote)).foregroundStyle(Theme.lilac.opacity(0.85))
+                }
+            }
+            .scrollContentBackground(.hidden)
+            .background(Theme.menu.ignoresSafeArea())
+            .navigationTitle("BUCKME")
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .cancellationAction) {
+                    if editing { Button(t.cancel) { accounts = store.data.buckme; editing = false } }
+                }
+                ToolbarItem(placement: .confirmationAction) {
+                    if editing {
+                        Button(t.s("Guardar", "Save")) { store.saveBuckme(accounts); accounts = store.data.buckme; editing = false }.fontWeight(.semibold)
+                    } else {
+                        Button(t.s("Editar", "Edit")) { editing = true }
+                    }
+                }
+            }
+        }
+        .presentationBackground(Theme.nightDeep)
+        .onAppear { accounts = store.data.buckme }
     }
 }

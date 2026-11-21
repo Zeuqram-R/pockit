@@ -120,7 +120,7 @@ final class SkinManager: ObservableObject {
             web.setExtraScripts(scripts)
             web.run(js)
             // Apagar el chat estilo iMessage en la página abierta: quitar su estilo y sus clases.
-            web.run("(function(){var s=document.getElementById('pockit-chat');if(s)s.remove();['pk-ubub','pk-urow','pk-abub','pk-composer'].forEach(function(c){document.querySelectorAll('.'+c).forEach(function(e){e.classList.remove(c)})});window.__pockitChat=null;})();")
+            web.run("(function(){try{if(window.__pockitChat&&window.__pockitChat.stop)window.__pockitChat.stop();}catch(e){}['pockit-chat','pockit-chat5'].forEach(function(i){var s=document.getElementById(i);if(s)s.remove();});['pk-ubub','pk-urow','pk-abub','pk-composer'].forEach(function(c){document.querySelectorAll('.'+c).forEach(function(e){e.classList.remove(c)})});window.__pockitChat=null;})();")
         }
     }
 }

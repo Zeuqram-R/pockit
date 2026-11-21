@@ -41,15 +41,62 @@ struct CollectibleItem: Codable, Identifiable, Hashable {
     var id = UUID()
     var name: String
     var foundAt = Date()
+    /// Variante (p. ej. "Bronze Legacy" en las cartas).
+    var variant: String?
+
+    init(name: String, foundAt: Date = Date(), variant: String? = nil) {
+        self.name = name; self.foundAt = foundAt; self.variant = variant
+    }
+
+    init(from d: Decoder) throws {
+        let c = try d.container(keyedBy: CodingKeys.self)
+        id = try c.decodeIfPresent(UUID.self, forKey: .id) ?? UUID()
+        name = try c.decode(String.self, forKey: .name)
+        foundAt = try c.decodeIfPresent(Date.self, forKey: .foundAt) ?? Date()
+        variant = try c.decodeIfPresent(String.self, forKey: .variant)
+    }
 }
 
+/// Subcategoría de collectibles (p. ej. "Meditations"), dentro de una categoría general (p. ej. "Exploration").
 struct CollectibleCategory: Codable, Identifiable, Hashable {
     var id = UUID()
+    /// Categoría general: Kenton's Treasures, Collectible Cards, Waink Locations, Exploration…
+    var group: String
     var name: String
-    /// Total de la categoría (viene de Marisol). Solo se muestra cuando la completas.
+    /// Total de la subcategoría (viene de Marisol). Solo se muestra cuando la completas.
     var total: Int?
     var items: [CollectibleItem] = []
-    var isComplete: Bool { if let total, total > 0 { return items.count >= total }; return false }
+    /// Encontrados que el juego no deja ver cuáles son (solo el número).
+    var extraCount = 0
+
+    var count: Int { items.count + extraCount }
+    var isComplete: Bool { if let total, total > 0 { return count >= total }; return false }
+
+    init(group: String, name: String, total: Int? = nil, items: [CollectibleItem] = [], extraCount: Int = 0) {
+        self.group = group; self.name = name; self.total = total; self.items = items; self.extraCount = extraCount
+    }
+
+    init(from d: Decoder) throws {
+        let c = try d.container(keyedBy: CodingKeys.self)
+        id = try c.decodeIfPresent(UUID.self, forKey: .id) ?? UUID()
+        name = try c.decode(String.self, forKey: .name)
+        group = try c.decodeIfPresent(String.self, forKey: .group) ?? name
+        total = try c.decodeIfPresent(Int.self, forKey: .total)
+        items = try c.decodeIfPresent([CollectibleItem].self, forKey: .items) ?? []
+        extraCount = try c.decodeIfPresent(Int.self, forKey: .extraCount) ?? 0
+    }
+}
+
+/// Orden fijo de las categorías generales (como en el menú Progress > Collections del juego).
+enum CollectibleGroups {
+    static let order = ["Kenton's Treasures", "Collectible Cards", "Waink Locations", "Exploration"]
+}
+
+/// Una cuenta dentro de BUCKME (p. ej. "Checking Account", "Family Savings").
+struct BuckmeAccount: Codable, Identifiable, Hashable {
+    var id = UUID()
+    var name: String
+    var amount: Int
 }
 
 struct MissionEntry: Codable, Identifiable, Hashable {
@@ -60,16 +107,37 @@ struct MissionEntry: Codable, Identifiable, Hashable {
 }
 
 struct PockitData: Codable {
-    var version = 1
+    var version = 2
     var pendientes: [Pendiente] = []
     var libreta: [Nota] = []
     var money: [MoneySnapshot] = []
+    var buckme: [BuckmeAccount] = []
     var propiedadesUnlocked = false
     var propiedades: [Propiedad] = []
     var collectibles: [CollectibleCategory] = []
     var missions: [MissionEntry] = []
     var importedEventLog = false
+    var seededV2 = false
     var updatedAt = Date()
+
+    init() {}
+
+    // Campos que falten (versiones viejas del archivo) quedan con su valor por defecto.
+    init(from d: Decoder) throws {
+        let c = try d.container(keyedBy: CodingKeys.self)
+        version = try c.decodeIfPresent(Int.self, forKey: .version) ?? 1
+        pendientes = try c.decodeIfPresent([Pendiente].self, forKey: .pendientes) ?? []
+        libreta = try c.decodeIfPresent([Nota].self, forKey: .libreta) ?? []
+        money = try c.decodeIfPresent([MoneySnapshot].self, forKey: .money) ?? []
+        buckme = try c.decodeIfPresent([BuckmeAccount].self, forKey: .buckme) ?? []
+        propiedadesUnlocked = try c.decodeIfPresent(Bool.self, forKey: .propiedadesUnlocked) ?? false
+        propiedades = try c.decodeIfPresent([Propiedad].self, forKey: .propiedades) ?? []
+        collectibles = try c.decodeIfPresent([CollectibleCategory].self, forKey: .collectibles) ?? []
+        missions = try c.decodeIfPresent([MissionEntry].self, forKey: .missions) ?? []
+        importedEventLog = try c.decodeIfPresent(Bool.self, forKey: .importedEventLog) ?? false
+        seededV2 = try c.decodeIfPresent(Bool.self, forKey: .seededV2) ?? false
+        updatedAt = try c.decodeIfPresent(Date.self, forKey: .updatedAt) ?? Date()
+    }
 }
 
 // MARK: - Store
@@ -108,6 +176,39 @@ final class PockitStore: ObservableObject {
             data = decoded
         }
         if !data.importedEventLog { importEventLog() }
+        if !data.seededV2 { seedV2() }
+    }
+
+    /// Lo que Jose ya tenía en el juego el 21 de nov (lo contó él): categorías de collectibles y cuentas de BUCKME.
+    private func seedV2() {
+        let seed: [CollectibleCategory] = [
+            CollectibleCategory(group: "Kenton's Treasures", name: "Kenton's Treasures", items: [
+                CollectibleItem(name: "Nuestra Señora del Ocio"),
+                CollectibleItem(name: "Nuestra Señora de la Ética Laxa"),
+                CollectibleItem(name: "Nuestra Señora de la Noche"),
+            ]),
+            CollectibleCategory(group: "Collectible Cards", name: "Los Santos Pounders", items: [
+                CollectibleItem(name: "Laki Maivia", variant: "Bronze Legacy"),
+            ]),
+            CollectibleCategory(group: "Collectible Cards", name: "Nine1Nine Dancers", items: [
+                CollectibleItem(name: "Aimie", variant: "Special Pink"),
+            ]),
+            CollectibleCategory(group: "Waink Locations", name: "Landmarks"),
+            CollectibleCategory(group: "Waink Locations", name: "Curiosities"),
+            CollectibleCategory(group: "Waink Locations", name: "Sculptures"),
+            CollectibleCategory(group: "Exploration", name: "Underwater Discoveries", extraCount: 1),
+            CollectibleCategory(group: "Exploration", name: "Magazines, Books & Comics", extraCount: 5),
+            CollectibleCategory(group: "Exploration", name: "Meditations", items: [
+                CollectibleItem(name: "Meditation spot del dock de la casa"),
+            ]),
+        ]
+        let accounts = [BuckmeAccount(name: "Checking Account", amount: 1_533), BuckmeAccount(name: "Family Savings", amount: 5_000)]
+        mutate { d in
+            d.collectibles = seed
+            if d.buckme.isEmpty { d.buckme = accounts }
+            d.seededV2 = true
+        }
+        syncBuckmeTotal()
     }
 
     private func mutate(_ change: (inout PockitData) -> Void) {
@@ -131,10 +232,20 @@ final class PockitStore: ObservableObject {
     // MARK: Etiquetas de Marisol
 
     func ingest(_ tag: [String: String], at date: Date = Date()) {
-        if let cat = tag["cat"], let item = tag["item"] {
+        if let cat = tag["cat"] {
             let before = collectiblesFound
-            addCollectible(category: cat, item: item, total: tag["total"].flatMap(Self.number), at: date)
-            if collectiblesFound > before { announce("🃏", lang: "Collectible: \(item)") }
+            if let item = tag["item"] {
+                addCollectible(category: cat, item: item, total: tag["total"].flatMap(Self.number),
+                               group: tag["group"], variant: tag["variant"], at: date)
+                if collectiblesFound > before { announce("🃏", lang: "Collectible: \(item)") }
+            } else if let n = tag["count"].flatMap(Self.number) {
+                setCollectibleCount(category: cat, count: n, total: tag["total"].flatMap(Self.number), group: tag["group"])
+                if collectiblesFound > before { announce("🃏", lang: "\(cat): \(n)") }
+            }
+        }
+        if let name = tag["buckme"] ?? (tag["account"]), let amount = tag["amount"].flatMap(Self.number) {
+            setBuckme(name: name, amount: amount)
+            announce("💰", lang: "BUCKME · \(name): \(Fmt.money(amount))")
         }
         if let tip = tag["tip"]?.trimmingCharacters(in: .whitespacesAndNewlines), !tip.isEmpty {
             let before = data.pendientes.count
@@ -241,29 +352,108 @@ final class PockitStore: ObservableObject {
 
     // MARK: Collectibles
 
-    var collectiblesFound: Int { data.collectibles.reduce(0) { $0 + $1.items.count } }
+    var collectiblesFound: Int { data.collectibles.reduce(0) { $0 + $1.count } }
 
-    func addCollectible(category: String, item: String, total: Int?, at date: Date = Date()) {
+    /// Busca (o crea) la subcategoría. Si no viene el grupo, usa el de la subcategoría que ya existe
+    /// o, si el nombre es el de una categoría general (p. ej. "Kenton's Treasures"), esa misma.
+    private func categoryIndex(_ d: inout PockitData, name cat: String, group: String?) -> Int {
+        if let i = d.collectibles.firstIndex(where: { $0.name.caseInsensitiveCompare(cat) == .orderedSame }) {
+            if let g = group?.trimmingCharacters(in: .whitespaces), !g.isEmpty { d.collectibles[i].group = g }
+            return i
+        }
+        let g = group?.trimmingCharacters(in: .whitespaces).nilIfEmpty
+            ?? CollectibleGroups.order.first { $0.caseInsensitiveCompare(cat) == .orderedSame }
+            ?? "Otros"
+        d.collectibles.append(CollectibleCategory(group: g, name: cat))
+        return d.collectibles.count - 1
+    }
+
+    func addCollectible(category: String, item: String, total: Int?, group: String? = nil, variant: String? = nil, at date: Date = Date()) {
         let cat = category.trimmingCharacters(in: .whitespacesAndNewlines)
         let name = item.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !cat.isEmpty, !name.isEmpty else { return }
         mutate { d in
-            var i = d.collectibles.firstIndex { $0.name.caseInsensitiveCompare(cat) == .orderedSame }
-            if i == nil { d.collectibles.append(CollectibleCategory(name: cat)); i = d.collectibles.count - 1 }
-            guard let idx = i else { return }
+            let idx = categoryIndex(&d, name: cat, group: group)
             if let total, total > 0 { d.collectibles[idx].total = total }
-            if !d.collectibles[idx].items.contains(where: { $0.name.caseInsensitiveCompare(name) == .orderedSame }) {
-                d.collectibles[idx].items.append(CollectibleItem(name: name, foundAt: date))
+            if let i = d.collectibles[idx].items.firstIndex(where: { $0.name.caseInsensitiveCompare(name) == .orderedSame }) {
+                if let variant, !variant.isEmpty { d.collectibles[idx].items[i].variant = variant }
+            } else {
+                d.collectibles[idx].items.append(CollectibleItem(name: name, foundAt: date, variant: variant?.nilIfEmpty))
+                // Si estaba contado "sin identificar", ahora que tiene nombre baja ese número.
+                if d.collectibles[idx].extraCount > 0 { d.collectibles[idx].extraCount -= 1 }
             }
         }
+    }
+
+    /// Cuando el juego solo dice cuántos llevás (sin decir cuáles).
+    func setCollectibleCount(category: String, count: Int, total: Int?, group: String? = nil) {
+        let cat = category.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !cat.isEmpty, count >= 0 else { return }
+        mutate { d in
+            let idx = categoryIndex(&d, name: cat, group: group)
+            if let total, total > 0 { d.collectibles[idx].total = total }
+            d.collectibles[idx].extraCount = max(0, count - d.collectibles[idx].items.count)
+        }
+    }
+
+    /// Subcategoría desbloqueada pero vacía (como las de Waink Locations).
+    func unlockCategory(_ name: String, group: String) {
+        mutate { d in _ = categoryIndex(&d, name: name, group: group) }
+    }
+
+    var collectibleGroups: [(name: String, categories: [CollectibleCategory])] {
+        let groups = Dictionary(grouping: data.collectibles, by: \.group)
+        let ordered = CollectibleGroups.order.filter { groups[$0] != nil } + groups.keys.filter { !CollectibleGroups.order.contains($0) }.sorted()
+        return ordered.map { ($0, groups[$0] ?? []) }
+    }
+
+    // MARK: BUCKME
+
+    var buckmeTotal: Int { data.buckme.reduce(0) { $0 + $1.amount } }
+
+    func setBuckme(name: String, amount: Int) {
+        let clean = name.trimmingCharacters(in: .whitespaces)
+        guard !clean.isEmpty else { return }
+        mutate { d in
+            if let i = d.buckme.firstIndex(where: { $0.name.caseInsensitiveCompare(clean) == .orderedSame }) {
+                d.buckme[i].amount = amount
+            } else {
+                d.buckme.append(BuckmeAccount(name: clean, amount: amount))
+            }
+        }
+        syncBuckmeTotal()
+    }
+
+    func saveBuckme(_ accounts: [BuckmeAccount]) {
+        mutate { $0.buckme = accounts.filter { !$0.name.trimmingCharacters(in: .whitespaces).isEmpty } }
+        syncBuckmeTotal()
+    }
+
+    /// El total de BUCKME en Money es la suma de sus cuentas.
+    private func syncBuckmeTotal() {
+        guard !data.buckme.isEmpty else { return }
+        let sum = buckmeTotal
+        let last = data.money.last
+        if last?.app == sum { return }
+        addMoney(MoneySnapshot(bank: last?.bank ?? 0, app: sum, home: last?.home ?? 0, source: "manual"))
     }
 
     func delete(_ item: CollectibleItem, in category: CollectibleCategory) {
         mutate { d in
             guard let i = d.collectibles.firstIndex(where: { $0.id == category.id }) else { return }
             d.collectibles[i].items.removeAll { $0.id == item.id }
-            if d.collectibles[i].items.isEmpty { d.collectibles.remove(at: i) }
         }
+    }
+
+    func setExtraCount(_ n: Int, in category: CollectibleCategory) {
+        mutate { d in
+            guard let i = d.collectibles.firstIndex(where: { $0.id == category.id }) else { return }
+            d.collectibles[i].extraCount = max(0, n)
+        }
+    }
+
+    func delete(category: CollectibleCategory) {
+        mutate { $0.collectibles.removeAll { $0.id == category.id } }
     }
 
     // MARK: Misiones
@@ -277,6 +467,10 @@ final class PockitStore: ObservableObject {
     }
 
     func delete(_ m: MissionEntry) { mutate { $0.missions.removeAll { $0.id == m.id } } }
+}
+
+extension String {
+    var nilIfEmpty: String? { trimmingCharacters(in: .whitespaces).isEmpty ? nil : self }
 }
 
 enum Fmt {

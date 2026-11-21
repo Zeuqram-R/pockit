@@ -33,30 +33,42 @@ struct CollectiblesView: View {
                     .menuRow()
                 }
 
-                Section {
-                    ForEach(store.data.collectibles) { cat in
-                        NavigationLink {
-                            CollectibleCategoryView(categoryID: cat.id)
-                        } label: {
-                            CategoryRow(cat: cat, t: t)
+                // Categorías generales (solo las que ya tienen algo desbloqueado), cada una con sus subcategorías.
+                ForEach(store.collectibleGroups, id: \.name) { group in
+                    Section {
+                        ForEach(group.categories) { cat in
+                            NavigationLink {
+                                CollectibleCategoryView(categoryID: cat.id)
+                            } label: {
+                                CategoryRow(cat: cat, t: t)
+                            }
+                            .menuRow()
                         }
-                        .menuRow()
+                    } header: {
+                        HStack {
+                            SectionTitle(text: group.name)
+                            Spacer()
+                            Text("\(group.categories.reduce(0) { $0 + $1.count })")
+                                .font(Theme.display(17, weight: .semibold))
+                                .foregroundStyle(Theme.switchPink)
+                        }
                     }
-                    // La siguiente categoría todavía no se sabe.
+                }
+
+                Section {
+                    // Lo que todavía no se ha descubierto.
                     HStack(spacing: 12) {
                         Image(systemName: "questionmark.square.dashed").font(.system(size: 22)).foregroundStyle(Theme.lilac.opacity(0.7)).frame(width: 30)
                         VStack(alignment: .leading, spacing: 2) {
                             Text("???").font(Theme.display(18, weight: .semibold)).foregroundStyle(Theme.lilac)
                             Text(store.data.collectibles.isEmpty
                                  ? t.s("Contale a Marisol cuando encontrés uno y su categoría aparece aquí.", "Tell Marisol when you find one and its category shows up here.")
-                                 : t.s("Más categorías por descubrir", "More categories to discover"))
+                                 : t.s("Más categorías y subcategorías por descubrir", "More categories and subcategories to discover"))
                                 .font(Theme.text(12, relativeTo: .caption)).foregroundStyle(Theme.lilac.opacity(0.8))
                         }
                     }
                     .padding(.vertical, 4)
                     .menuRow()
-                } header: {
-                    SectionTitle(text: t.s("Categorías", "Categories"))
                 }
             }
             .scrollContentBackground(.hidden)
@@ -68,7 +80,7 @@ struct CollectiblesView: View {
                         .accessibilityLabel(t.s("Agregar a mano", "Add manually"))
                 }
             }
-            .sheet(isPresented: $adding) { CollectibleAddSheet().presentationDetents([.medium]) }
+            .sheet(isPresented: $adding) { CollectibleAddSheet().presentationDetents([.medium, .large]) }
         }
     }
 }
@@ -84,11 +96,11 @@ private struct CategoryRow: View {
             VStack(alignment: .leading, spacing: 4) {
                 Text(cat.name).font(Theme.text(16, .semibold)).foregroundStyle(.white)
                 if cat.isComplete, let total = cat.total {
-                    ProgressView(value: Double(cat.items.count), total: Double(total)).tint(Theme.switchPink)
+                    ProgressView(value: Double(cat.count), total: Double(total)).tint(Theme.switchPink)
                 }
             }
             Spacer()
-            Text(cat.isComplete ? "\(cat.items.count)/\(cat.total ?? cat.items.count)" : "\(cat.items.count)/??")
+            Text(cat.isComplete ? "\(cat.count)/\(cat.total ?? cat.count)" : "\(cat.count)/??")
                 .font(Theme.display(20, weight: .semibold))
                 .foregroundStyle(cat.isComplete ? Theme.switchPink : .white)
         }
@@ -100,6 +112,8 @@ struct CollectibleCategoryView: View {
     let categoryID: UUID
     @EnvironmentObject private var settings: AppSettings
     @EnvironmentObject private var store: PockitStore
+    @Environment(\.dismiss) private var dismiss
+    @State private var confirmDelete = false
 
     var body: some View {
         let t = settings.t
@@ -107,9 +121,15 @@ struct CollectibleCategoryView: View {
         List {
             if let cat {
                 Section {
+                    if cat.items.isEmpty && cat.extraCount == 0 {
+                        EmptyRow(symbol: "sparkles", text: t.s("Desbloqueada, pero todavía sin ninguno.", "Unlocked, but none found yet."))
+                    }
                     ForEach(cat.items.sorted { $0.foundAt > $1.foundAt }) { item in
                         HStack {
-                            Text(item.name).font(Theme.text(16)).foregroundStyle(.white)
+                            VStack(alignment: .leading, spacing: 2) {
+                                Text(item.name).font(Theme.text(16)).foregroundStyle(.white)
+                                if let v = item.variant { Text(v).font(Theme.text(12, .semibold, relativeTo: .caption)).foregroundStyle(Theme.switchPink) }
+                            }
                             Spacer()
                             Text(Fmt.relative(item.foundAt, lang: settings.language))
                                 .font(Theme.text(11, relativeTo: .caption2)).foregroundStyle(Theme.lilac)
@@ -117,8 +137,18 @@ struct CollectibleCategoryView: View {
                         .menuRow()
                         .swipeActions { Button(role: .destructive) { store.delete(item, in: cat) } label: { Label(t.s("Borrar", "Delete"), systemImage: "trash") } }
                     }
+                    if cat.extraCount > 0 || !cat.items.isEmpty {
+                        Stepper(value: Binding(get: { cat.extraCount }, set: { store.setExtraCount($0, in: cat) }), in: 0...999) {
+                            VStack(alignment: .leading, spacing: 2) {
+                                Text(t.s("Sin identificar: \(cat.extraCount)", "Unidentified: \(cat.extraCount)")).font(Theme.text(16)).foregroundStyle(.white)
+                                Text(t.s("Los que el juego cuenta pero no dice cuáles.", "Ones the game counts but doesn't name."))
+                                    .font(Theme.text(11, relativeTo: .caption2)).foregroundStyle(Theme.lilac)
+                            }
+                        }
+                        .menuRow()
+                    }
                 } header: {
-                    SectionTitle(text: cat.isComplete ? "\(cat.items.count)/\(cat.total ?? 0) · " + t.s("Completa", "Complete") : "\(cat.items.count)/??")
+                    SectionTitle(text: (cat.group == cat.name ? "" : cat.group + " · ") + (cat.isComplete ? "\(cat.count)/\(cat.total ?? 0) " + t.s("Completa", "Complete") : "\(cat.count)/??"))
                 }
             }
         }
@@ -126,6 +156,17 @@ struct CollectibleCategoryView: View {
         .background(Theme.menu.ignoresSafeArea())
         .navigationTitle((cat?.name ?? "").uppercased())
         .navigationBarTitleDisplayMode(.inline)
+        .toolbar {
+            ToolbarItem(placement: .primaryAction) {
+                Menu {
+                    Button(role: .destructive) { confirmDelete = true } label: { Label(t.s("Borrar subcategoría", "Delete subcategory"), systemImage: "trash") }
+                } label: { Image(systemName: "ellipsis.circle") }
+            }
+        }
+        .confirmationDialog(t.s("¿Borrar esta subcategoría y lo que tiene?", "Delete this subcategory and its items?"), isPresented: $confirmDelete, titleVisibility: .visible) {
+            Button(t.s("Borrar", "Delete"), role: .destructive) { if let cat { store.delete(category: cat) }; dismiss() }
+            Button(t.cancel, role: .cancel) {}
+        }
     }
 }
 
@@ -133,31 +174,30 @@ struct CollectibleAddSheet: View {
     @EnvironmentObject private var settings: AppSettings
     @EnvironmentObject private var store: PockitStore
     @Environment(\.dismiss) private var dismiss
+    @State private var group = ""
     @State private var category = ""
     @State private var item = ""
+    @State private var variant = ""
 
     var body: some View {
         let t = settings.t
+        let groups = Array(Set(CollectibleGroups.order + store.data.collectibles.map(\.group))).sorted {
+            (CollectibleGroups.order.firstIndex(of: $0) ?? 99, $0) < (CollectibleGroups.order.firstIndex(of: $1) ?? 99, $1)
+        }
+        let cats = store.data.collectibles.filter { group.isEmpty || $0.group == group }
         NavigationStack {
             Form {
                 Section {
-                    TextField(t.s("Categoría", "Category"), text: $category).menuRow()
-                    if !store.data.collectibles.isEmpty {
-                        ScrollView(.horizontal, showsIndicators: false) {
-                            HStack {
-                                ForEach(store.data.collectibles) { c in
-                                    Button(c.name) { category = c.name }
-                                        .font(Theme.text(13, .semibold))
-                                        .padding(.horizontal, 12).padding(.vertical, 6)
-                                        .background(Capsule().fill(category == c.name ? Theme.switchPink : Theme.purple))
-                                        .foregroundStyle(.white)
-                                        .buttonStyle(.plain)
-                                }
-                            }
-                        }
-                        .listRowBackground(Color.clear)
-                    }
-                    TextField(t.s("Cuál encontraste", "Which one you found"), text: $item).menuRow()
+                    chips(groups, selected: group) { group = $0; category = "" }
+                    TextField(t.s("Categoría general", "Category"), text: $group).menuRow()
+                } header: { SectionTitle(text: t.s("Categoría", "Category")) }
+                Section {
+                    if !cats.isEmpty { chips(cats.map(\.name), selected: category) { category = $0 } }
+                    TextField(t.s("Subcategoría", "Subcategory"), text: $category).menuRow()
+                } header: { SectionTitle(text: t.s("Subcategoría", "Subcategory")) }
+                Section {
+                    TextField(t.s("Cuál encontraste (vacío = solo desbloquear)", "Which one (empty = just unlock)"), text: $item).menuRow()
+                    TextField(t.s("Variante (opcional)", "Variant (optional)"), text: $variant).menuRow()
                 } footer: {
                     Text(t.s("Normalmente no hace falta: cuando le contás a Marisol, se anota solo.", "Usually not needed: when you tell Marisol, it's logged automatically."))
                         .font(Theme.text(13, relativeTo: .footnote)).foregroundStyle(Theme.lilac.opacity(0.85))
@@ -171,14 +211,36 @@ struct CollectibleAddSheet: View {
                 ToolbarItem(placement: .cancellationAction) { Button(t.cancel) { dismiss() } }
                 ToolbarItem(placement: .confirmationAction) {
                     Button(t.s("Agregar", "Add")) {
-                        store.addCollectible(category: category, item: item, total: nil)
+                        let g = group.trimmingCharacters(in: .whitespaces)
+                        let c = category.trimmingCharacters(in: .whitespaces).nilIfEmpty ?? g
+                        if item.trimmingCharacters(in: .whitespaces).isEmpty {
+                            store.unlockCategory(c, group: g)
+                        } else {
+                            store.addCollectible(category: c, item: item, total: nil, group: g, variant: variant)
+                        }
                         dismiss()
                     }
-                    .disabled(category.trimmingCharacters(in: .whitespaces).isEmpty || item.trimmingCharacters(in: .whitespaces).isEmpty)
+                    .disabled(group.trimmingCharacters(in: .whitespaces).isEmpty)
                 }
             }
         }
         .presentationBackground(Theme.nightDeep)
+    }
+
+    private func chips(_ names: [String], selected: String, pick: @escaping (String) -> Void) -> some View {
+        ScrollView(.horizontal, showsIndicators: false) {
+            HStack {
+                ForEach(names, id: \.self) { n in
+                    Button(n) { pick(n) }
+                        .font(Theme.text(13, .semibold))
+                        .padding(.horizontal, 12).padding(.vertical, 6)
+                        .background(Capsule().fill(selected == n ? Theme.switchPink : Theme.purple))
+                        .foregroundStyle(selected == n ? Theme.nightDeep : .white)
+                        .buttonStyle(.plain)
+                }
+            }
+        }
+        .listRowBackground(Color.clear)
     }
 }
 

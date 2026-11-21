@@ -143,58 +143,42 @@ struct TopBar: View {
 
     var body: some View {
         let t = settings.t
-        HStack(spacing: 10) {
-            Button(action: onChats) {
-                Image(systemName: "sidebar.left")
-                    .font(.system(size: 20, weight: .semibold))
-                    .foregroundStyle(.white)
-                    .frame(width: 34, height: 44)
+        // Como el encabezado de iMessage: botón a la izquierda, contacto al centro, botones a la derecha.
+        ZStack(alignment: .top) {
+            HStack(spacing: 10) {
+                GlassCircleButton(systemName: "sidebar.left", label: t.s("Conversaciones", "Chats"), action: onChats)
+                Spacer()
+                GlassCircleButton(systemName: state.spoilersOn ? "eye.fill" : "eye.slash.fill",
+                                  label: state.spoilersOn ? t.spoilersOn : t.spoilersOff,
+                                  tint: state.spoilersOn ? Theme.sunset : .white) { confirmSpoilers = true }
+                GlassCircleButton(systemName: "gearshape.fill", label: t.settings, action: onSettings)
             }
-            .accessibilityLabel(t.s("Conversaciones", "Chats"))
+            .padding(.top, 10)
 
             Button(action: onAvatar) {
-                AvatarView(mood: state.mood, size: 52, spoilerDot: state.lastReplyHadSpoiler)
+                VStack(spacing: 4) {
+                    AvatarView(mood: state.mood, size: 58, spoilerDot: state.lastReplyHadSpoiler)
+                    HStack(spacing: 3) {
+                        Text("Marisol").font(Theme.text(15, .semibold, relativeTo: .subheadline))
+                        Image(systemName: "chevron.right").font(.system(size: 10, weight: .bold)).opacity(0.7)
+                    }
+                    .foregroundStyle(.white)
+                    .padding(.horizontal, 12)
+                    .frame(height: 26)
+                    .background(Capsule().fill(.ultraThinMaterial))
+                    .background(Capsule().fill(Theme.nightDeep.opacity(0.35)))
+                    .overlay(Capsule().stroke(Color.white.opacity(0.18), lineWidth: 1))
+                    Text(state.progressSummary ?? t.noProgressYet)
+                        .font(Theme.text(11, .medium, relativeTo: .caption2))
+                        .foregroundStyle(Theme.lilac)
+                        .lineLimit(1)
+                }
             }
             .buttonStyle(.plain)
             .accessibilityLabel(t.s("Mi Partida", "My Game"))
-
-            VStack(alignment: .leading, spacing: 1) {
-                DisplayTitle(text: "MARISOL", size: 24)
-                Text(state.progressSummary ?? t.noProgressYet)
-                    .font(Theme.text(12, .medium, relativeTo: .caption))
-                    .foregroundStyle(Theme.lilac)
-                    .lineLimit(1)
-            }
-
-            Spacer(minLength: 4)
-
-            Button {
-                confirmSpoilers = true
-            } label: {
-                HStack(spacing: 4) {
-                    Image(systemName: state.spoilersOn ? "eye.fill" : "eye.slash.fill")
-                    Text(state.spoilersOn ? t.spoilersOn : t.spoilersOff)
-                }
-                .font(Theme.text(12, .semibold, relativeTo: .caption))
-                .foregroundStyle(state.spoilersOn ? Theme.nightDeep : .white)
-                .padding(.horizontal, 10)
-                .frame(minHeight: 30)
-                .background(Capsule().fill(state.spoilersOn ? Theme.sunset : Theme.purple))
-            }
-            .buttonStyle(.plain)
-            .accessibilityLabel(state.spoilersOn ? t.spoilersOn : t.spoilersOff)
-
-            Button(action: onSettings) {
-                Image(systemName: "gearshape.fill")
-                    .font(.system(size: 20, weight: .semibold))
-                    .foregroundStyle(.white)
-                    .frame(width: 40, height: 44)
-            }
-            .accessibilityLabel(t.settings)
         }
-        .padding(.leading, 6)
-        .padding(.trailing, 6)
-        .padding(.vertical, 6)
+        .padding(.horizontal, 12)
+        .padding(.bottom, 6)
         .background(Theme.night)
         .confirmationDialog(state.spoilersOn ? t.spoilersTurnOffQ : t.spoilersTurnOnQ,
                             isPresented: $confirmSpoilers, titleVisibility: .visible) {
@@ -205,6 +189,28 @@ struct TopBar: View {
             }
             Button(t.cancel, role: .cancel) {}
         }
+    }
+}
+
+/// Botón redondo de vidrio (como los del encabezado de iMessage).
+struct GlassCircleButton: View {
+    let systemName: String
+    let label: String
+    var tint: Color = .white
+    let action: () -> Void
+
+    var body: some View {
+        Button(action: action) {
+            Image(systemName: systemName)
+                .font(.system(size: 17, weight: .semibold))
+                .foregroundStyle(tint)
+                .frame(width: 44, height: 44)
+                .background(Circle().fill(.ultraThinMaterial))
+                .background(Circle().fill(Theme.nightDeep.opacity(0.35)))
+                .overlay(Circle().stroke(Color.white.opacity(0.18), lineWidth: 1))
+        }
+        .buttonStyle(.plain)
+        .accessibilityLabel(label)
     }
 }
 
