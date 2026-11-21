@@ -20,24 +20,40 @@
   <!-- tapa abierta hacia atrás -->
   <path d="M134 214 L148 48 Q150 34 166 34 L346 34 Q362 34 364 48 L378 214 Z" fill="url(#lid)" stroke="#0E0818" stroke-width="16" stroke-linejoin="round"/>
 
-  <path d="M160 200 L170 58 L342 58 L352 200 Z" fill="#2A1240" opacity="0.7"/>
-  <!-- cartas saliendo del deck -->
-  <g transform="rotate(-12 256 300)">
-    <rect x="176" y="86" width="120" height="170" rx="12" fill="url(#teal)" stroke="#0E0818" stroke-width="12"/>
-    <rect x="190" y="100" width="92" height="142" rx="8" fill="none" stroke="#FFF4E6" stroke-width="6" opacity="0.8"/>
-  </g>
-  <g transform="rotate(10 256 300)">
-    <rect x="216" y="80" width="120" height="170" rx="12" fill="url(#gold)" stroke="#0E0818" stroke-width="12"/>
-    <rect x="230" y="94" width="92" height="142" rx="8" fill="none" stroke="#FFF4E6" stroke-width="6" opacity="0.8"/>
+  <!-- slabs graduados, uno detrás del otro -->
+  <g>
+    <rect x="150" y="14" width="176" height="240" rx="12" fill="#D9CBEA" stroke="#0E0818" stroke-width="11"/>
+    <rect x="162" y="26" width="152" height="34" rx="5" fill="#2EC4B6" stroke="#0E0818" stroke-width="6"/>
+    <path d="M174 38 L236 38 M174 49 L218 49" stroke="#0E0818" stroke-width="5" stroke-linecap="round" opacity="0.55"/>
+    <rect x="270" y="30" width="32" height="25" rx="4" fill="#FFF4E6" stroke="#0E0818" stroke-width="4"/>
+    <text x="286" y="50" text-anchor="middle" font-family="DejaVu Sans, Arial, sans-serif" font-weight="900" font-size="19" fill="#0E0818">10</text>
+    <rect x="172" y="70" width="132" height="160" rx="6" fill="url(#teal)" stroke="#0E0818" stroke-width="6"/>
+    <circle cx="238.0" cy="118" r="26" fill="#FFF4E6" opacity="0.9"/>
+    <path d="M204.0 164 L272.0 164" stroke="#FFF4E6" stroke-width="7" stroke-linecap="round" opacity="0.9"/>
+    <path d="M164 78 L164 214" stroke="#FFFFFF" stroke-width="6" stroke-linecap="round" opacity="0.6"/>
   </g>
   <g>
-    <rect x="196" y="62" width="120" height="180" rx="12" fill="url(#sun)" stroke="#0E0818" stroke-width="12"/>
-    <rect x="210" y="76" width="92" height="152" rx="8" fill="none" stroke="#FFF4E6" stroke-width="6"/>
-    <ellipse cx="256" cy="140" rx="30" ry="38" fill="none" stroke="#FFF4E6" stroke-width="7"/>
-    <circle cx="256" cy="140" r="11" fill="#FFF4E6"/>
-    <path d="M222 92 L236 92 M276 92 L290 92" stroke="#FFF4E6" stroke-width="6" stroke-linecap="round"/>
+    <rect x="168" y="38" width="176" height="240" rx="12" fill="#D9CBEA" stroke="#0E0818" stroke-width="11"/>
+    <rect x="180" y="50" width="152" height="34" rx="5" fill="#FFB547" stroke="#0E0818" stroke-width="6"/>
+    <path d="M192 62 L254 62 M192 73 L236 73" stroke="#0E0818" stroke-width="5" stroke-linecap="round" opacity="0.55"/>
+    <rect x="288" y="54" width="32" height="25" rx="4" fill="#FFF4E6" stroke="#0E0818" stroke-width="4"/>
+    <text x="304" y="74" text-anchor="middle" font-family="DejaVu Sans, Arial, sans-serif" font-weight="900" font-size="19" fill="#0E0818">10</text>
+    <rect x="190" y="94" width="132" height="160" rx="6" fill="url(#gold)" stroke="#0E0818" stroke-width="6"/>
+    <circle cx="256.0" cy="142" r="26" fill="#FFF4E6" opacity="0.9"/>
+    <path d="M222.0 188 L290.0 188" stroke="#FFF4E6" stroke-width="7" stroke-linecap="round" opacity="0.9"/>
+    <path d="M182 102 L182 238" stroke="#FFFFFF" stroke-width="6" stroke-linecap="round" opacity="0.6"/>
   </g>
-
+  <g>
+    <rect x="186" y="62" width="176" height="240" rx="12" fill="#D9CBEA" stroke="#0E0818" stroke-width="11"/>
+    <rect x="198" y="74" width="152" height="34" rx="5" fill="#FF3E8A" stroke="#0E0818" stroke-width="6"/>
+    <path d="M210 86 L272 86 M210 97 L254 97" stroke="#0E0818" stroke-width="5" stroke-linecap="round" opacity="0.55"/>
+    <rect x="306" y="78" width="32" height="25" rx="4" fill="#FFF4E6" stroke="#0E0818" stroke-width="4"/>
+    <text x="322" y="98" text-anchor="middle" font-family="DejaVu Sans, Arial, sans-serif" font-weight="900" font-size="19" fill="#0E0818">10</text>
+    <rect x="208" y="118" width="132" height="160" rx="6" fill="url(#sun)" stroke="#0E0818" stroke-width="6"/>
+    <circle cx="274.0" cy="166" r="26" fill="#FFF4E6" opacity="0.9"/>
+    <path d="M240.0 212 L308.0 212" stroke="#FFF4E6" stroke-width="7" stroke-linecap="round" opacity="0.9"/>
+    <path d="M200 126 L200 262" stroke="#FFFFFF" stroke-width="6" stroke-linecap="round" opacity="0.6"/>
+  </g>
   <!-- cuerpo del protector -->
   <rect x="128" y="200" width="256" height="262" rx="28" fill="url(#box)" stroke="#0E0818" stroke-width="18"/>
   <!-- borde interior de la boca -->
