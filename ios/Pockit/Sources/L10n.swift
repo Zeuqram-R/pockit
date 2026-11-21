@@ -5,7 +5,7 @@ struct L10n {
     let lang: AppLanguage
     init(_ lang: AppLanguage) { self.lang = lang }
 
-    private func s(_ es: String, _ en: String) -> String { lang == .es ? es : en }
+    func s(_ es: String, _ en: String) -> String { lang == .es ? es : en }
 
     // Pantalla de carga
     var loading: String { s("Marisol se está arreglando…", "Marisol is getting ready…") }

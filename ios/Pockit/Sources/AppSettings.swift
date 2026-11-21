@@ -29,6 +29,15 @@ final class AppSettings: ObservableObject {
 
     var t: L10n { L10n(language) }
 
+    @AppStorage("pockit.tabIcons") var tabIconsRaw: String = TabIconStyle.color.rawValue {
+        didSet { objectWillChange.send() }
+    }
+
+    var tabIconStyle: TabIconStyle {
+        get { TabIconStyle(rawValue: tabIconsRaw) ?? .color }
+        set { tabIconsRaw = newValue.rawValue }
+    }
+
     /// El ícono escogido lo guardamos nosotros: con apps re-firmadas, iOS a veces devuelve
     /// `alternateIconName == nil` aunque el ícono sí cambió, y eso bloqueaba volver al pin.
     @AppStorage("pockit.icon") private var iconRaw: String = AppIconChoice.pin.rawValue

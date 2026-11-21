@@ -6,8 +6,11 @@ struct RootView: View {
     @EnvironmentObject private var web: WebModel
     @EnvironmentObject private var state: PockitState
     @EnvironmentObject private var skin: SkinManager
+    @EnvironmentObject private var store: PockitStore
     @Environment(\.scenePhase) private var scenePhase
+    @StateObject private var keyboard = KeyboardWatcher()
     @State private var showSettings = false
+    @State private var showPartida = false
     @State private var showLoading = true
 
     var body: some View {
@@ -15,11 +18,33 @@ struct RootView: View {
             Theme.night.ignoresSafeArea()
 
             VStack(spacing: 0) {
-                TopBar(onSettings: { showSettings = true })
-                QuickBar()
-                WebContainer(webView: web.webView)
-                    .ignoresSafeArea(.container, edges: .bottom)
+                ZStack {
+                    // El chat siempre vivo (la WebView no se recarga al cambiar de pestaña).
+                    VStack(spacing: 0) {
+                        TopBar(onSettings: { showSettings = true }, onAvatar: { showPartida = true })
+                        QuickBar()
+                        WebContainer(webView: web.webView)
+                    }
+                    .opacity(state.tab == .marisol ? 1 : 0)
+                    .allowsHitTesting(state.tab == .marisol)
+                    .accessibilityHidden(state.tab != .marisol)
+
+                    switch state.tab {
+                    case .marisol: EmptyView()
+                    case .pendientes: PendientesView()
+                    case .money: MoneyView()
+                    case .collectibles: CollectiblesView()
+                    case .mapa: MapaView()
+                    }
+                }
+                .frame(maxHeight: .infinity)
+
+                if !keyboard.visible {
+                    PockitTabBar(selection: $state.tab, style: settings.tabIconStyle, t: settings.t)
+                        .transition(.move(edge: .bottom).combined(with: .opacity))
+                }
             }
+            .animation(.easeOut(duration: 0.2), value: keyboard.visible)
 
             if let problem = web.sendProblem {
                 SendProblemBanner(reason: problem) { web.sendProblem = nil }
@@ -42,8 +67,17 @@ struct RootView: View {
                 .environmentObject(web)
                 .environmentObject(state)
                 .environmentObject(skin)
+                .environmentObject(store)
+        }
+        .sheet(isPresented: $showPartida) {
+            MiPartidaView()
+                .environmentObject(settings)
+                .environmentObject(web)
+                .environmentObject(state)
+                .environmentObject(store)
         }
         .onAppear {
+            state.onEvent = { tag in store.ingest(tag) }
             web.onTags = { items in state.handle(items: items) }
             web.setPrefix(state.prefix(lang: settings.language))
             skin.attach(web)
@@ -66,6 +100,7 @@ struct RootView: View {
 /// Barra superior: cara de Marisol, progreso, switch de spoilers y ajustes.
 struct TopBar: View {
     let onSettings: () -> Void
+    let onAvatar: () -> Void
     @EnvironmentObject private var settings: AppSettings
     @EnvironmentObject private var web: WebModel
     @EnvironmentObject private var state: PockitState
@@ -74,7 +109,11 @@ struct TopBar: View {
     var body: some View {
         let t = settings.t
         HStack(spacing: 10) {
-            AvatarView(mood: state.mood, size: 52, spoilerDot: state.lastReplyHadSpoiler)
+            Button(action: onAvatar) {
+                AvatarView(mood: state.mood, size: 52, spoilerDot: state.lastReplyHadSpoiler)
+            }
+            .buttonStyle(.plain)
+            .accessibilityLabel(t.s("Mi Partida", "My Game"))
 
             VStack(alignment: .leading, spacing: 1) {
                 DisplayTitle(text: "MARISOL", size: 24)
@@ -105,7 +144,7 @@ struct TopBar: View {
             Button(action: onSettings) {
                 Image(systemName: "gearshape.fill")
                     .font(.system(size: 20, weight: .semibold))
-                    .foregroundStyle(Theme.sunset)
+                    .foregroundStyle(.white)
                     .frame(width: 40, height: 44)
             }
             .accessibilityLabel(t.settings)

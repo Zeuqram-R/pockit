@@ -43,6 +43,20 @@ struct SettingsView: View {
                 }
 
                 Section {
+                    HStack(spacing: 16) {
+                        tabStyleOption(.color, t)
+                        tabStyleOption(.game, t)
+                    }
+                    .frame(maxWidth: .infinity)
+                    .padding(.vertical, 6)
+                    .menuRow()
+                } header: {
+                    SectionTitle(text: t.s("Íconos de pestañas", "Tab icons"))
+                } footer: {
+                    Text(t.s("Cambia los íconos de la barra de abajo. Marisol sale con su cara en los dos.", "Changes the icons in the bottom bar. Marisol keeps her face in both.")).font(Theme.text(13, relativeTo: .footnote)).foregroundStyle(Theme.lilac.opacity(0.85))
+                }
+
+                Section {
                     Toggle(t.skinToggle, isOn: Binding(
                         get: { skin.localEnabled },
                         set: { skin.localEnabled = $0 }))
@@ -139,6 +153,24 @@ struct SettingsView: View {
             }
         }
         .presentationBackground(Theme.nightDeep)
+    }
+
+    private func tabStyleOption(_ style: TabIconStyle, _ t: L10n) -> some View {
+        let selected = settings.tabIconStyle == style
+        return Button {
+            UISelectionFeedbackGenerator().selectionChanged()
+            settings.tabIconStyle = style
+        } label: {
+            VStack(spacing: 8) {
+                TabStylePreview(style: style)
+                    .overlay(Capsule().stroke(selected ? Theme.switchPink : Color.clear, lineWidth: 3).padding(-4))
+                Text(style.title(t))
+                    .font(Theme.text(13, selected ? .semibold : .regular, relativeTo: .footnote))
+                    .foregroundStyle(selected ? Color.white : Theme.lilac)
+            }
+        }
+        .buttonStyle(.plain)
+        .accessibilityAddTraits(selected ? .isSelected : [])
     }
 
     private func iconOption(_ choice: AppIconChoice, title: String) -> some View {

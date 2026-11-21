@@ -12,6 +12,10 @@ final class PockitState: ObservableObject {
     @Published var lastReplyHadSpoiler = false
     /// Marisol está dando pistas de un secreto: se muestran "Otra pista" y "Dime ya".
     @Published var hintsOpen = false
+    /// Pestaña visible (se cambia desde la barra o desde botones como "Pregúntale a Marisol").
+    @Published var tab: PockitTab = .marisol
+    /// Lo conecta RootView con PockitStore.ingest.
+    var onEvent: (([String: String]) -> Void)?
 
     @AppStorage("pockit.spoilersOn") var spoilersOn = false {
         willSet { objectWillChange.send() }
@@ -84,15 +88,12 @@ final class PockitState: ObservableObject {
     private func apply(_ tag: [String: String]) {
         if let pct = tag["pct"], let n = Int(pct.filter(\.isNumber)) { progressPct = min(100, max(0, n)) }
         if let mission = tag["mission"], !mission.isEmpty { progressMission = mission }
-        // Collectibles, tips y money se guardan pa' la fase 3 (tracker).
-        if tag["collectible"] != nil || tag["cat"] != nil || tag["tip"] != nil
-            || tag["bank"] != nil || tag["app"] != nil || tag["home"] != nil {
-            EventLog.append(tag)
-        }
+        // Collectibles, tips, money y misiones van al tracker (PockitStore).
+        onEvent?(tag)
     }
 }
 
-/// Registro local de eventos (collectibles, tips, money) que la fase 3 va a leer.
+/// Registro viejo de eventos (antes de la fase 3). PockitStore lo importa una vez.
 enum EventLog {
     static var url: URL {
         let dir = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask)[0]
