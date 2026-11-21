@@ -164,7 +164,89 @@
     return !!(el && el.closest('[contenteditable="true"], textarea, input'));
   }
 
+  // ---------- Spoilers que se tocan pa' ver ----------
+  // Marisol los manda entre ⟦spoiler title="…"⟧ y ⟦/spoiler⟧ (o el viejo <details>…</details>,
+  // que claude.ai muestra como texto). Aquí se esconden y se cambian por un botón.
+  const SPOILER_START = /⟦spoiler(?:\s+title="([^"]*)")?[^⟧]*⟧|<details>/;
+  const SPOILER_END = /⟦\/spoiler⟧|<\/details>/;
+  const SPOILER_STRIP = /⟦spoiler[^⟧]*⟧|⟦\/spoiler⟧|<\/?details>|<summary>[\s\S]*?<\/summary>/g;
+  let spoilerCount = 0;
+
+  function blockOf(node) {
+    const el = node.nodeType === 3 ? node.parentElement : node;
+    return el ? el.closest("p, li, h1, h2, h3, h4, blockquote, pre, ul, ol, div") : null;
+  }
+
+  function stripText(el) {
+    const w = document.createTreeWalker(el, NodeFilter.SHOW_TEXT);
+    const list = [];
+    while (w.nextNode()) list.push(w.currentNode);
+    for (const t of list) {
+      const v = t.nodeValue.replace(SPOILER_STRIP, "");
+      if (v !== t.nodeValue) t.nodeValue = v;
+    }
+  }
+
+  function processSpoilers() {
+    const walker = document.createTreeWalker(document.body, NodeFilter.SHOW_TEXT, {
+      acceptNode: (n) => (n.nodeValue && SPOILER_START.test(n.nodeValue) && !isEditable(n))
+        ? NodeFilter.FILTER_ACCEPT : NodeFilter.FILTER_REJECT
+    });
+    const starts = [];
+    while (walker.nextNode()) starts.push(walker.currentNode);
+
+    for (const startNode of starts) {
+      const first = blockOf(startNode);
+      if (!first || first.dataset.pockitSpoiler) continue;
+      const m = startNode.nodeValue.match(SPOILER_START);
+      // Si el bloque es un contenedor grande con texto antes del spoiler, no lo escondemos entero.
+      if (first.tagName === "DIV" && (first.innerText || "").indexOf(m ? m[0] : "⟦spoiler") > 20) continue;
+      let title = (m && m[1]) || "";
+      if (!title) {
+        const sm = (first.innerText || "").match(/<summary>([\s\S]*?)<\/summary>/);
+        if (sm) title = sm[1].replace(/⚠️|SPOILER:?/gi, "").trim();
+      }
+      // Junta los bloques hasta el cierre. Si todavía no llega (está escribiendo), espera.
+      const blocks = [first];
+      let el = first;
+      let closed = SPOILER_END.test(first.innerText || "");
+      while (!closed && el.nextElementSibling) {
+        el = el.nextElementSibling;
+        blocks.push(el);
+        closed = SPOILER_END.test(el.innerText || "");
+      }
+      if (!closed) continue;
+
+      const id = "s" + (++spoilerCount);
+      for (const b of blocks) {
+        stripText(b);
+        b.dataset.pockitSpoiler = id;
+        b.style.display = "none";
+      }
+      const en = (window.__pockitPrefix || "").includes("lang:en");
+      const btn = document.createElement("button");
+      btn.type = "button";
+      btn.dataset.pockitToggle = id;
+      btn.textContent = "⚠️ SPOILER" + (title ? ": " + title : "") + (en ? " · tap to reveal" : " · tocá pa' ver");
+      btn.style.cssText = "display:block;width:100%;text-align:left;margin:12px 0;padding:12px 14px;" +
+        "border-radius:14px;border:1.5px solid #FFB547;background:rgba(255,181,71,0.12);" +
+        "color:#FFF4E6;font:600 15px -apple-system,system-ui,sans-serif;";
+      btn.addEventListener("click", (e) => {
+        e.preventDefault();
+        e.stopPropagation();
+        const open = btn.dataset.open === "1";
+        document.querySelectorAll('[data-pockit-spoiler="' + id + '"]').forEach((b) => {
+          b.style.display = open ? "none" : "";
+        });
+        btn.dataset.open = open ? "0" : "1";
+        btn.style.opacity = open ? "1" : "0.7";
+      });
+      first.parentNode.insertBefore(btn, first);
+    }
+  }
+
   function scan() {
+    try { processSpoilers(); } catch (e) { post({ type: "log", message: "spoiler: " + e }); }
     const walker = document.createTreeWalker(document.body, NodeFilter.SHOW_TEXT, {
       acceptNode: (n) => (n.nodeValue && n.nodeValue.indexOf("⟦") !== -1 && !isEditable(n))
         ? NodeFilter.FILTER_ACCEPT : NodeFilter.FILTER_REJECT
