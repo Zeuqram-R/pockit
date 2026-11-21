@@ -25,13 +25,17 @@ struct SettingsView: View {
                     Text(t.languageFooter)
                 }
 
-                Section(t.icon) {
+                Section {
                     HStack(spacing: 20) {
                         iconOption(.pin, title: t.iconPin)
                         iconOption(.marisol, title: t.iconMarisol)
                     }
                     .frame(maxWidth: .infinity)
                     .padding(.vertical, 6)
+                } header: {
+                    Text(t.icon)
+                } footer: {
+                    Text(t.iconFooter)
                 }
 
                 Section {
@@ -74,6 +78,13 @@ struct SettingsView: View {
                 ToolbarItem(placement: .confirmationAction) {
                     Button(t.done) { dismiss() }
                 }
+            }
+            .alert(t.iconFailed, isPresented: Binding(
+                get: { settings.iconError != nil },
+                set: { if !$0 { settings.iconError = nil } })) {
+                Button("OK", role: .cancel) {}
+            } message: {
+                Text(settings.iconError ?? "")
             }
             .alert(t.pasteLinkInvalid, isPresented: $linkError) {
                 Button("OK", role: .cancel) {}

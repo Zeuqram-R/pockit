@@ -20,6 +20,8 @@ struct L10n {
     var icon: String { s("Ícono", "App icon") }
     var iconPin: String { s("Pin de Leonida", "Leonida pin") }
     var iconMarisol: String { s("Silueta de Marisol", "Marisol silhouette") }
+    var iconFooter: String { s("iOS te avisa con un cuadro cada vez que cambia el ícono.", "iOS shows a notice every time the icon changes.") }
+    var iconFailed: String { s("No pude cambiar el ícono", "Couldn't change the icon") }
     var session: String { s("Sesión de claude.ai", "claude.ai session") }
     var pasteLink: String { s("Pegar link de acceso", "Paste sign-in link") }
     var pasteLinkFooter: String {
