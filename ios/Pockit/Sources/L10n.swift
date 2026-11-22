@@ -7,6 +7,32 @@ struct L10n {
 
     func s(_ es: String, _ en: String) -> String { lang == .es ? es : en }
 
+    /// El idioma elegido, para código que no tiene acceso a AppSettings (avisos, estados).
+    static var current: L10n {
+        L10n(AppLanguage(rawValue: UserDefaults.standard.string(forKey: "pockit.lang") ?? "es") ?? .es)
+    }
+
+    /// Textos guardados en los datos (no nombres del juego) que tienen traducción conocida.
+    private static let dataPairs: [(String, String)] = [
+        ("Casa del inicio (Jason)", "Starting house (Jason's)"),
+        ("Bicicleta", "Bicycle"),
+        ("Ultimate Edition: Retro Build gratis en Coastal Auto Care (Key Lento), en Full Kits / Pro Builds. Solo se usa en el Chapter 1.",
+         "Ultimate Edition: free Retro Build at Coastal Auto Care (Key Lento), under Full Kits / Pro Builds. Only used in Chapter 1."),
+        ("Ultimate Edition (army fatigue). Solo se usa en el Chapter 1.", "Ultimate Edition (army fatigue). Only used in Chapter 1."),
+        ("Viene con la casa del inicio.", "Comes with the starting house."),
+        ("Meditation spot del dock de la casa", "Meditation spot on the house dock"),
+        ("Otros", "Other"),
+    ]
+    /// Traduce un texto guardado si es uno de los conocidos (en cualquier dirección); si no, lo deja igual.
+    func data(_ v: String) -> String {
+        if lang == .en, let p = Self.dataPairs.first(where: { $0.0 == v }) { return p.1 }
+        if lang == .es, let p = Self.dataPairs.first(where: { $0.1 == v }) {
+            return p.0 == "Meditation spot del dock de la casa" ? "Spot de meditación en el muelle de la casa" : p.0
+        }
+        if lang == .es, v == "Meditation spot del dock de la casa" { return "Spot de meditación en el muelle de la casa" }
+        return v
+    }
+
     // Pantalla de carga
     var loading: String { s("Marisol se está arreglando…", "Marisol is getting ready…") }
     var loadFailed: String { s("No pude abrir claude.ai. Revisá tu internet.", "Couldn't open claude.ai. Check your connection.") }

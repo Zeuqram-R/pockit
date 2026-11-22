@@ -23,7 +23,7 @@ struct MoneyView: View {
                 LargeTitleRow(text: "PORTFOLIO")
                 Section {
                     IconSegments(items: [
-                        (MoneySection.dinero, "Money", .tab(.money)),
+                        (MoneySection.dinero, "Money", .asset("money")),
                         (MoneySection.propiedades, t.s("Propiedades", "Properties"), .asset("properties")),
                         (MoneySection.garage, "Garage", .asset("garage")),
                     ], selection: $section)
@@ -457,9 +457,9 @@ struct GarageSections: View {
                             HStack(spacing: 12) {
                                 Image(systemName: kind.symbol).font(.system(size: 18)).foregroundStyle(Theme.switchPink).frame(width: 28)
                                 VStack(alignment: .leading, spacing: 2) {
-                                    Text(v.name).font(Theme.text(16, .semibold)).foregroundStyle(.white)
-                                    if !v.location.isEmpty { Text(v.location).font(Theme.text(12)).foregroundStyle(Theme.lilac) }
-                                    if !v.notes.isEmpty { Text(v.notes).font(Theme.text(11)).foregroundStyle(Theme.lilac.opacity(0.8)).lineLimit(2) }
+                                    Text(t.data(v.name)).font(Theme.text(16, .semibold)).foregroundStyle(.white)
+                                    if !v.location.isEmpty { Text(t.data(v.location)).font(Theme.text(12)).foregroundStyle(Theme.lilac) }
+                                    if !v.notes.isEmpty { Text(t.data(v.notes)).font(Theme.text(11)).foregroundStyle(Theme.lilac.opacity(0.8)).lineLimit(2) }
                                 }
                             }
                         }

@@ -462,7 +462,7 @@ final class PockitStore: ObservableObject {
             if let item = tag["item"] {
                 addCollectible(category: cat, item: item, total: tag["total"].flatMap(Self.number),
                                group: tag["group"], variant: tag["variant"], at: date)
-                if collectiblesFound > before { announce("🃏", lang: "Collectible: \(item)") }
+                if collectiblesFound > before { announce("🃏", lang: "\(L10n.current.s("Coleccionable", "Collectible")): \(L10n.current.data(item))") }
             } else if let n = tag["count"].flatMap(Self.number) {
                 setCollectibleCount(category: cat, count: n, total: tag["total"].flatMap(Self.number), group: tag["group"])
                 if collectiblesFound > before { announce("🃏", lang: "\(cat): \(n)") }
@@ -481,7 +481,7 @@ final class PockitStore: ObservableObject {
         if type == "vehicle", let v = tag["name"], !v.isEmpty {
             if !data.vehicles.contains(where: { $0.name.caseInsensitiveCompare(v) == .orderedSame }) {
                 saveVehicle(Vehicle(name: v, kind: tag["kind"] ?? "car", location: tag["where"] ?? ""))
-                announce("🚗", lang: v)
+                announce("🚗", lang: L10n.current.data(v))
             }
         }
         if let name = tag["buckme"] ?? (tag["account"]), let amount = tag["amount"].flatMap(Self.number) {
@@ -503,7 +503,7 @@ final class PockitStore: ObservableObject {
                 source: "marisol")
             let before = data.money.count
             addMoney(snap)
-            if data.money.count > before { announce("💰", lang: "Money: \(Fmt.money(snap.total))") }
+            if data.money.count > before { announce("💰", lang: "\(L10n.current.s("Dinero", "Money")): \(Fmt.money(snap.total))") }
         }
         if let mission = tag["mission"]?.trimmingCharacters(in: .whitespaces), !mission.isEmpty {
             let before = data.missions.count

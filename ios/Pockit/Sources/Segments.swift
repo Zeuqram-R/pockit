@@ -22,7 +22,7 @@ struct IconSegments<T: Hashable>: View {
                     withAnimation(.easeOut(duration: 0.2)) { selection = item.value }
                 } label: {
                     VStack(spacing: 4) {
-                        icon(item.icon, active: active).frame(width: 34, height: 34)
+                        icon(item.icon, active: active).frame(width: 41, height: 41)
                         Text(item.title)
                             .font(Theme.text(12, active ? .semibold : .regular, relativeTo: .caption))
                             .foregroundStyle(active ? Theme.switchPink : Theme.lilac)
@@ -53,10 +53,10 @@ struct IconSegments<T: Hashable>: View {
         case .asset(let name):
             StyledIcon(name: name, active: active, style: settings.tabIconStyle)
                 .frame(width: 40, height: 40)
-                .scaleEffect(0.85)
+                .scaleEffect(1.02)
         case .symbol(let name):
             Image(systemName: name)
-                .font(.system(size: 20, weight: .semibold))
+                .font(.system(size: 24, weight: .semibold))
                 .foregroundStyle(active ? Theme.switchPink : .white.opacity(0.85))
         }
     }
@@ -101,8 +101,13 @@ private struct NavFadeBackground: View {
         GeometryReader { g in
             VStack(spacing: 0) {
                 // Alto = barra + zona de la hora (en hojas como Ajustes no hay zona de la hora).
-                Rectangle().fill(Theme.nightDeep.opacity(0.88 * progress))
-                    .frame(height: max(barHeight, g.safeAreaInsets.top))
+                ZStack {
+                    Rectangle().fill(.ultraThinMaterial)
+                    Rectangle().fill(Theme.nightDeep.opacity(0.86))
+                }
+                .environment(\.colorScheme, .dark)
+                .opacity(Double(progress))
+                .frame(height: max(barHeight, g.safeAreaInsets.top))
                 Rectangle().fill(Color.white.opacity(0.12 * progress))
                     .frame(height: 0.5)
                 Spacer(minLength: 0)

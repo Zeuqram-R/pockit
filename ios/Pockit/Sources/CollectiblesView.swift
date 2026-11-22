@@ -62,7 +62,7 @@ struct CollectiblesView: View {
                         }
                     } header: {
                         HStack {
-                            SectionTitle(text: group.name)
+                            SectionTitle(text: settings.t.data(group.name))
                             Spacer()
                             Text("\(group.categories.reduce(0) { $0 + $1.count })")
                                 .font(Theme.display(17, weight: .semibold))
@@ -150,7 +150,7 @@ struct CollectibleCategoryView: View {
                     ForEach(cat.items.sorted { $0.foundAt > $1.foundAt }) { item in
                         HStack {
                             VStack(alignment: .leading, spacing: 2) {
-                                Text(item.name).font(Theme.text(16)).foregroundStyle(.white)
+                                Text(settings.t.data(item.name)).font(Theme.text(16)).foregroundStyle(.white)
                                 if let v = item.variant { Text(v).font(Theme.text(12, .semibold, relativeTo: .caption)).foregroundStyle(Theme.switchPink) }
                             }
                             Spacer()

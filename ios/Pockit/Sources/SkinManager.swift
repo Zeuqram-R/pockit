@@ -58,7 +58,7 @@ final class SkinManager: ObservableObject {
             }
             lastStatus = "ok v\(cssVersion) · chat v\(chatVersion)"
         } catch {
-            lastStatus = "sin conexión, usando copia guardada"
+            lastStatus = L10n.current.s("sin conexión, usando copia guardada", "offline, using saved copy")
         }
         objectWillChange.send()
         apply()
