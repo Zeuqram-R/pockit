@@ -20,7 +20,7 @@ struct CollectiblesView: View {
                     IconSegments(items: [
                         (ProgressSection.collections, "Collections", .asset("collections")),
                         (ProgressSection.challenges, "Challenges", .asset("challenges")),
-                        (ProgressSection.activities, "Activities", .symbol("figure.run")),
+                        (ProgressSection.activities, "Activities", .asset("activities")),
                     ], selection: $section)
                     .listRowBackground(Color.clear)
                     .listRowInsets(EdgeInsets(top: 4, leading: 0, bottom: 4, trailing: 0))
