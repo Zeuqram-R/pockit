@@ -31,7 +31,7 @@ struct RootView: View {
                             .ignoresSafeArea(.keyboard, edges: .bottom)
                             // Conversación nueva: vista nativa encima de la página del proyecto.
                             .overlay {
-                                if web.isNewChat { NewChatView() }
+                                if web.showsNewChat { NewChatView() }
                             }
                             // Deslizar desde el borde izquierdo abre el panel de conversaciones.
                             .overlay(alignment: .leading) {

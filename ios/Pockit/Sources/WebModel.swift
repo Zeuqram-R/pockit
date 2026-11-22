@@ -23,6 +23,16 @@ final class WebModel: NSObject, ObservableObject {
     @Published var dotsDocked = false
     var isChatPage: Bool { currentPath.hasPrefix("/chat/") }
 
+    /// 0.3.23: primer mensaje de una conversación nueva. claude.ai pasa de la página del proyecto al chat sin recargar
+    /// y deja el layout de "chat nuevo" a medias (caja flotando, sin burbujas, sin scroll). Mientras tanto la vista nativa
+    /// sigue encima (tu burbuja + puntitos); cuando Marisol termina la primera respuesta se carga el chat limpio y se destapa.
+    @Published var pendingFirstMessage: String?
+    private var pendingChatPath: String?
+    private var pendingSawStreaming = false
+    private var pendingReloading = false
+    /// La vista de conversación nueva va encima de la WebView.
+    var showsNewChat: Bool { isNewChat || pendingFirstMessage != nil }
+
     /// Lo llama el puente JS con las etiquetas de Marisol.
     var onTags: (@MainActor ([[String: Any]]) -> Void)?
     /// Lista de conversaciones del proyecto leída por chat.js.
@@ -104,6 +114,7 @@ final class WebModel: NSObject, ObservableObject {
     }
 
     func loadHome() {
+        cancelPendingNewChat()
         loadError = false
         webView.load(URLRequest(url: Self.projectURL))
     }
@@ -112,6 +123,7 @@ final class WebModel: NSObject, ObservableObject {
         let path = wv.url?.path ?? ""
         if path != currentPath { currentPath = path }
         if path.hasPrefix("/chat/") {
+            if pendingFirstMessage != nil, pendingChatPath == nil { watchPendingChat(path) }
             UserDefaults.standard.set(path, forKey: Self.lastChatKey)
             let id = String(path.dropFirst("/chat/".count)).components(separatedBy: "/").first ?? ""
             onChatVisited?(id, wv.title)
@@ -136,6 +148,7 @@ final class WebModel: NSObject, ObservableObject {
 
     /// Abre una ruta de claude.ai sin recargar toda la página cuando se puede (navegación interna de la app web).
     func open(path: String) {
+        cancelPendingNewChat()
         loadError = false
         let js = """
         (function(p){
@@ -149,6 +162,37 @@ final class WebModel: NSObject, ObservableObject {
             if error != nil, let url = URL(string: "https://claude.ai" + path) {
                 Task { @MainActor in self?.webView.load(URLRequest(url: url)) }
             }
+        }
+    }
+
+    /// Manda el primer mensaje desde la pantalla de conversación nueva.
+    func startNewChat(_ text: String) {
+        pendingChatPath = nil
+        pendingSawStreaming = false
+        pendingReloading = false
+        pendingFirstMessage = text
+        send(text)
+    }
+
+    func cancelPendingNewChat() {
+        pendingFirstMessage = nil
+        pendingChatPath = nil
+        pendingSawStreaming = false
+        pendingReloading = false
+    }
+
+    private func watchPendingChat(_ path: String) {
+        pendingChatPath = path
+        Task { @MainActor in
+            // Espera a que Marisol termine su primera respuesta (máximo 2 min).
+            for _ in 0..<240 {
+                try? await Task.sleep(for: .milliseconds(500))
+                guard pendingChatPath == path, !pendingReloading else { return }
+                if pendingSawStreaming && !isStreaming { break }
+            }
+            guard pendingChatPath == path, !pendingReloading, let url = URL(string: "https://claude.ai" + path) else { return }
+            pendingReloading = true
+            webView.load(URLRequest(url: url))
         }
     }
 
@@ -237,6 +281,7 @@ final class WebModel: NSObject, ObservableObject {
             if let items = dict["items"] as? [[String: Any]] { onTags?(items) }
         case "streaming":
             isStreaming = (dict["on"] as? Bool) ?? false
+            if isStreaming && pendingFirstMessage != nil { pendingSawStreaming = true }
         case "dotsDocked":
             dotsDocked = (dict["on"] as? Bool) ?? false
         case "projectChats":
@@ -275,6 +320,13 @@ extension WebModel: WKNavigationDelegate {
         hideKeyboardAccessoryBar()
         hasLoadedOnce = true
         loadError = false
+        if pendingReloading {
+            // un momentito pa' que chat.js ponga las burbujas antes de destapar
+            Task { @MainActor in
+                try? await Task.sleep(for: .milliseconds(600))
+                if pendingReloading { cancelPendingNewChat() }
+            }
+        }
     }
 
     func webView(_ webView: WKWebView, didFail navigation: WKNavigation!, withError error: Error) {
@@ -290,6 +342,7 @@ extension WebModel: WKNavigationDelegate {
         // Cancelaciones normales (otra navegación empezó) no son errores.
         if ns.domain == NSURLErrorDomain && ns.code == NSURLErrorCancelled { return }
         if ns.domain == "WebKitErrorDomain" && ns.code == 102 { return }
+        if pendingReloading { cancelPendingNewChat() }
         if !hasLoadedOnce { loadError = true }
     }
 
