@@ -65,7 +65,9 @@ final class SkinManager: ObservableObject {
     }
 
     private func fetch(_ path: String) async throws -> Data {
-        var request = URLRequest(url: URL(string: Self.base + path)!)
+        // GitHub guarda copias por ~5 min; con un número distinto en cada pedido siempre llega lo último.
+        let bust = (path.contains("?") ? "&" : "?") + "t=\(Int(Date().timeIntervalSince1970))"
+        var request = URLRequest(url: URL(string: Self.base + path + bust)!)
         request.cachePolicy = .reloadIgnoringLocalCacheData
         request.timeoutInterval = 10
         let (data, response) = try await URLSession.shared.data(for: request)
