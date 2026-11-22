@@ -1,0 +1,11 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" width="512" height="512"><defs>
+<linearGradient id="gold" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#FFE08A"/><stop offset="1" stop-color="#FFB547"/></linearGradient>
+<linearGradient id="pink" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#FF6FA6"/><stop offset="1" stop-color="#E02470"/></linearGradient>
+<linearGradient id="purp" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#9A45AE"/><stop offset="1" stop-color="#5A2370"/></linearGradient>
+<linearGradient id="teal" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#5FE0D3"/><stop offset="1" stop-color="#1E9C90"/></linearGradient>
+<linearGradient id="sun" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#FFC56B"/><stop offset="0.5" stop-color="#FF7A45"/><stop offset="1" stop-color="#FF3E8A"/></linearGradient>
+<linearGradient id="cream" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#FFF8EE"/><stop offset="1" stop-color="#F2DCC4"/></linearGradient>
+</defs>
+<path d="M256 52 L298 118 L376 100 L372 178 L444 214 L392 272 L432 340 L356 360 L342 438 L270 408 L212 460 L180 386 L104 380 L124 306 L64 256 L130 214 L114 138 L190 142 L218 70 Z" fill="url(#sun)" stroke="#0E0818" stroke-width="16" stroke-linejoin="round" stroke-linecap="round"/>
+<circle cx="256" cy="262" r="118" fill="url(#purp)" stroke="#0E0818" stroke-width="14" stroke-linejoin="round" stroke-linecap="round"/>
+<text x="256" y="292" text-anchor="middle" font-family="DejaVu Sans" font-weight="900" font-size="88" fill="#FFF4E6" stroke="#0E0818" stroke-width="5">100%</text><path d="M432 54 L440 80 L466 88 L440 96 L432 122 L424 96 L398 88 L424 80 Z" fill="#FFE08A" stroke="#0E0818" stroke-width="7" stroke-linejoin="round"/></svg>

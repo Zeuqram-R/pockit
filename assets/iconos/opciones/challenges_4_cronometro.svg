@@ -1,0 +1,14 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" width="512" height="512"><defs>
+<linearGradient id="gold" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#FFE08A"/><stop offset="1" stop-color="#FFB547"/></linearGradient>
+<linearGradient id="pink" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#FF6FA6"/><stop offset="1" stop-color="#E02470"/></linearGradient>
+<linearGradient id="purp" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#9A45AE"/><stop offset="1" stop-color="#5A2370"/></linearGradient>
+<linearGradient id="teal" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#5FE0D3"/><stop offset="1" stop-color="#1E9C90"/></linearGradient>
+<linearGradient id="sun" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#FFC56B"/><stop offset="0.5" stop-color="#FF7A45"/><stop offset="1" stop-color="#FF3E8A"/></linearGradient>
+<linearGradient id="cream" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#FFF8EE"/><stop offset="1" stop-color="#F2DCC4"/></linearGradient>
+</defs>
+<rect x="226" y="52" width="60" height="44" rx="8" fill="url(#pink)" stroke="#0E0818" stroke-width="12" stroke-linejoin="round" stroke-linecap="round"/>
+<path d="M360 118 L392 88" stroke="#0E0818" stroke-width="26" stroke-linejoin="round" stroke-linecap="round"/><path d="M360 118 L392 88" stroke="url(#gold)" stroke-width="12" stroke-linecap="round"/>
+<circle cx="256" cy="282" r="176" fill="url(#gold)" stroke="#0E0818" stroke-width="16" stroke-linejoin="round" stroke-linecap="round"/><circle cx="256" cy="282" r="138" fill="#FFF4E6" stroke="#0E0818" stroke-width="10" stroke-linejoin="round" stroke-linecap="round"/>
+<path d="M256 282 L256 172" stroke="#0E0818" stroke-width="18" stroke-linejoin="round" stroke-linecap="round"/><path d="M256 282 L330 330" stroke="#0E0818" stroke-width="16" stroke-linejoin="round" stroke-linecap="round"/>
+<path d="M256 282 L256 144 A138 138 0 0 1 380 222 Z" fill="url(#pink)" opacity=".45"/>
+<circle cx="256" cy="282" r="18" fill="url(#pink)" stroke="#0E0818" stroke-width="8" stroke-linejoin="round" stroke-linecap="round"/><path d="M432 54 L440 80 L466 88 L440 96 L432 122 L424 96 L398 88 L424 80 Z" fill="#FFE08A" stroke="#0E0818" stroke-width="7" stroke-linejoin="round"/></svg>

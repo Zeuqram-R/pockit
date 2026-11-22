@@ -1,0 +1,12 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" width="512" height="512"><defs>
+<linearGradient id="gold" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#FFE08A"/><stop offset="1" stop-color="#FFB547"/></linearGradient>
+<linearGradient id="pink" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#FF6FA6"/><stop offset="1" stop-color="#E02470"/></linearGradient>
+<linearGradient id="purp" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#9A45AE"/><stop offset="1" stop-color="#5A2370"/></linearGradient>
+<linearGradient id="teal" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#5FE0D3"/><stop offset="1" stop-color="#1E9C90"/></linearGradient>
+<linearGradient id="sun" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#FFC56B"/><stop offset="0.5" stop-color="#FF7A45"/><stop offset="1" stop-color="#FF3E8A"/></linearGradient>
+<linearGradient id="cream" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#FFF8EE"/><stop offset="1" stop-color="#F2DCC4"/></linearGradient>
+</defs>
+<rect x="108" y="70" width="22" height="390" rx="8" fill="url(#gold)" stroke="#0E0818" stroke-width="12" stroke-linejoin="round" stroke-linecap="round"/>
+<path d="M130 88 Q220 60 300 96 Q370 126 430 98 L430 290 Q370 318 300 288 Q220 252 130 280 Z" fill="#FFF4E6" stroke="#0E0818" stroke-width="16" stroke-linejoin="round" stroke-linecap="round"/>
+<g fill="#0E0818"><path d="M130 88 Q160 80 190 78 L190 140 Q160 144 130 152 Z"/><path d="M250 82 Q275 86 300 96 L300 160 Q275 150 250 144 Z"/><path d="M190 140 L250 144 L250 208 Q220 204 190 206 Z"/><path d="M300 160 Q330 172 360 174 L360 238 Q330 236 300 224 Z"/><path d="M130 216 Q160 208 190 206 L190 270 Q160 272 130 280 Z"/><path d="M360 110 Q395 112 430 98 L430 162 Q395 176 360 174 Z"/><path d="M250 208 Q275 214 300 224 L300 288 Q275 276 250 270 Z"/><path d="M360 238 L430 226 L430 290 Q395 302 360 302 Z"/></g>
+<circle cx="119" cy="62" r="18" fill="url(#pink)" stroke="#0E0818" stroke-width="8" stroke-linejoin="round" stroke-linecap="round"/><path d="M432 54 L440 80 L466 88 L440 96 L432 122 L424 96 L398 88 L424 80 Z" fill="#FFE08A" stroke="#0E0818" stroke-width="7" stroke-linejoin="round"/></svg>
