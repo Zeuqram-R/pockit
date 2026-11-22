@@ -35,6 +35,7 @@ final class WebModel: NSObject, ObservableObject {
     private var offsetObservation: NSKeyValueObservation?
     private var keyboardTokens: [NSObjectProtocol] = []
     private var keyboardUp = false
+    private var keyboardLockUntil = Date.distantPast
     private var urlObservation: NSKeyValueObservation?
 
     override init() {
@@ -336,9 +337,12 @@ extension WebModel {
             Task { @MainActor in self?.sendKeyboard(0, duration: dur) }
         })
         // WebKit intenta mover toda la página pa' arriba al enfocar la caja; la dejamos quieta.
+        // 0.3.21: también al cerrarse el teclado (ahí la página se iba pa' abajo y volvía). Se corrige en el mismo
+        // instante (sin esperar otro ciclo) y solo cuando no es el dedo: el rebote al arrastrar sigue igual.
         offsetObservation = webView.scrollView.observe(\.contentOffset, options: [.new]) { [weak self] sv, _ in
-            Task { @MainActor in
-                guard let self, self.keyboardUp, sv.contentOffset.y != 0 else { return }
+            MainActor.assumeIsolated {
+                guard let self, self.keyboardUp || Date() < self.keyboardLockUntil,
+                      sv.contentOffset.y != 0, !sv.isTracking, !sv.isDragging else { return }
                 sv.setContentOffset(CGPoint(x: sv.contentOffset.x, y: 0), animated: false)
             }
         }
@@ -353,6 +357,7 @@ extension WebModel {
 
     private func sendKeyboard(_ height: CGFloat, duration: Double) {
         keyboardUp = height > 0
+        keyboardLockUntil = Date().addingTimeInterval(max(duration, 0.25) + 0.8)
         if keyboardUp { webView.scrollView.setContentOffset(.zero, animated: false) }
         webView.evaluateJavaScript("window.pockitKeyboard && window.pockitKeyboard(\(Int(height)), \(duration))", completionHandler: nil)
     }
