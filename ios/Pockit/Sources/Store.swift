@@ -443,6 +443,7 @@ final class PockitStore: ObservableObject {
     // MARK: Etiquetas de Marisol
 
     func ingest(_ tag: [String: String], at date: Date = Date()) {
+        let type = tag["_type"] ?? ""
         if let cat = tag["cat"], type.isEmpty || type == "collectible" {
             let before = collectiblesFound
             if let item = tag["item"] {
@@ -454,7 +455,6 @@ final class PockitStore: ObservableObject {
                 if collectiblesFound > before { announce("🃏", lang: "\(cat): \(n)") }
             }
         }
-        let type = tag["_type"] ?? ""
         if type == "challenge", let c = tag["cat"], let item = tag["item"] {
             markChallenge(category: c, item: item)
             announce("🏆", lang: "\(c): \(item)")
