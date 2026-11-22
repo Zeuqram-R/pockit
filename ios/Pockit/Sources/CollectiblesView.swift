@@ -15,6 +15,7 @@ struct CollectiblesView: View {
         let t = settings.t
         NavigationStack {
             List {
+                LargeTitleRow(text: "PROGRESS")
                 Section {
                     IconSegments(items: [
                         (ProgressSection.collections, "Collections", .tab(.collectibles)),
@@ -93,8 +94,7 @@ struct CollectiblesView: View {
             }
             .scrollContentBackground(.hidden)
             .background(Theme.menu.ignoresSafeArea())
-            .fadingNavBar()
-            .navigationTitle("PROGRESS")
+            .fadingNavBar(title: "PROGRESS")
             .toolbar {
                 ToolbarItem(placement: .primaryAction) {
                     if section == .collections {

@@ -21,6 +21,7 @@ struct PendientesView: View {
         let t = settings.t
         NavigationStack {
             List {
+                LargeTitleRow(text: t.s("PENDIENTES", "TO-DO"))
                 Section {
                     Picker("", selection: $mode) {
                         Text(t.s("Pendientes", "To-do")).tag(Mode.pendientes)
@@ -36,8 +37,7 @@ struct PendientesView: View {
             .scrollContentBackground(.hidden)
             .background(Theme.menu.ignoresSafeArea())
             .searchable(text: $query, placement: .navigationBarDrawer(displayMode: .automatic), prompt: t.s("Buscar", "Search"))
-            .fadingNavBar()
-            .navigationTitle(t.s("PENDIENTES", "TO-DO"))
+            .fadingNavBar(title: t.s("PENDIENTES", "TO-DO"))
             .toolbar {
                 ToolbarItem(placement: .primaryAction) {
                     Button { newText = ""; adding = true } label: { Image(systemName: "plus.circle.fill").font(.system(size: 22)) }

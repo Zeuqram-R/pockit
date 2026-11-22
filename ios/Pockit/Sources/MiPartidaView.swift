@@ -13,6 +13,7 @@ struct MiPartidaView: View {
         let pct = max(0, state.progressPct)
         NavigationStack {
             List {
+                LargeTitleRow(text: t.s("MI PARTIDA", "MY GAME"))
                 Section {
                     HStack(spacing: 18) {
                         ZStack {
@@ -87,8 +88,7 @@ struct MiPartidaView: View {
             }
             .scrollContentBackground(.hidden)
             .background(Theme.menu.ignoresSafeArea())
-            .fadingNavBar()
-            .navigationTitle(t.s("MI PARTIDA", "MY GAME"))
+            .fadingNavBar(title: t.s("MI PARTIDA", "MY GAME"))
             .toolbar {
                 ToolbarItem(placement: .confirmationAction) { Button(t.done) { dismiss() } }
             }

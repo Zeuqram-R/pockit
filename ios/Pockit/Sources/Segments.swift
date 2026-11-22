@@ -58,8 +58,13 @@ struct IconSegments<T: Hashable>: View {
 }
 
 /// Barra de navegación que se difumina poco a poco al hacer scroll (en vez de aparecer de golpe).
+/// Barra de arriba que se oscurece poco a poco al bajar. Arriba del todo es del mismo color que el fondo.
+/// Con `largeTitle`, el título grande va dentro del contenido (LargeTitleRow) y se difumina al subir,
+/// mientras el título chiquito aparece poco a poco en la barra (nada de títulos cortados).
 struct FadingNavBar: ViewModifier {
+    var title: String? = nil
     @State private var progress: CGFloat = 0
+    @State private var baseline: CGFloat? = nil
 
     func body(content: Content) -> some View {
         if #available(iOS 18.0, *) {
@@ -67,16 +72,72 @@ struct FadingNavBar: ViewModifier {
                 .onScrollGeometryChange(for: CGFloat.self) { g in
                     g.contentOffset.y + g.contentInsets.top
                 } action: { _, y in
-                    progress = min(max(y / 70, 0), 1)
+                    // El punto de reposo es "cero", aunque el sistema arranque con un desfase.
+                    if baseline == nil || y < baseline! { baseline = y }
+                    let d = y - (baseline ?? 0)
+                    progress = min(max(d / 90, 0), 1)
                 }
+                .environment(\.navFade, progress)
                 .toolbarBackground(Theme.nightDeep.opacity(0.88 * progress), for: .navigationBar)
                 .toolbarBackground(.visible, for: .navigationBar)
+                .modifier(InlineFadingTitle(title: title, progress: progress))
+        } else {
+            if let title { content.navigationTitle(title) } else { content }
+        }
+    }
+}
+
+private struct InlineFadingTitle: ViewModifier {
+    let title: String?
+    let progress: CGFloat
+    func body(content: Content) -> some View {
+        if let title {
+            content
+                .navigationTitle(title)
+                .navigationBarTitleDisplayMode(.inline)
+                .toolbar {
+                    ToolbarItem(placement: .principal) {
+                        Text(title.uppercased())
+                            .font(Theme.display(22))
+                            .foregroundStyle(.white)
+                            .opacity(Double(min(max((progress - 0.35) / 0.5, 0), 1)))
+                            .offset(y: (1 - min(max((progress - 0.35) / 0.5, 0), 1)) * 6)
+                    }
+                }
         } else {
             content
         }
     }
 }
 
+/// Título grande dentro de la lista: se desvanece (y se encoge un pelín) a medida que sube hacia la barra.
+struct LargeTitleRow: View {
+    let text: String
+    @Environment(\.navFade) private var navFade
+
+    var body: some View {
+        if #available(iOS 18.0, *) {
+            // navFade va de 0 a 1 en 90 pt de scroll; el título grande se va en los primeros ~40 pt.
+            let fade = 1 - min(max(navFade * 90 / 40, 0), 1)
+            DisplayTitle(text: text, size: 36)
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .opacity(Double(fade))
+                .scaleEffect(0.94 + 0.06 * fade, anchor: .leading)
+                .listRowBackground(Color.clear)
+                .listRowSeparator(.hidden)
+                .listRowInsets(EdgeInsets(top: 0, leading: 20, bottom: 0, trailing: 20))
+        }
+    }
+}
+
+private struct NavFadeKey: EnvironmentKey { static let defaultValue: CGFloat = 0 }
+extension EnvironmentValues {
+    var navFade: CGFloat {
+        get { self[NavFadeKey.self] }
+        set { self[NavFadeKey.self] = newValue }
+    }
+}
+
 extension View {
-    func fadingNavBar() -> some View { modifier(FadingNavBar()) }
+    func fadingNavBar(title: String? = nil) -> some View { modifier(FadingNavBar(title: title)) }
 }

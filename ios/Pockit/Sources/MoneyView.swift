@@ -20,6 +20,7 @@ struct MoneyView: View {
         let previous = store.data.money.dropLast().last
         NavigationStack {
             List {
+                LargeTitleRow(text: "PORTFOLIO")
                 Section {
                     IconSegments(items: [
                         (MoneySection.dinero, "Money", .tab(.money)),
@@ -159,8 +160,7 @@ struct MoneyView: View {
             }
             .scrollContentBackground(.hidden)
             .background(Theme.menu.ignoresSafeArea())
-            .fadingNavBar()
-            .navigationTitle("PORTFOLIO")
+            .fadingNavBar(title: "PORTFOLIO")
             .toolbar {
                 ToolbarItem(placement: .primaryAction) {
                     if section == .dinero {
