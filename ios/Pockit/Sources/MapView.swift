@@ -1,11 +1,11 @@
 import SwiftUI
 import UIKit
-import PhotosUI
+import WebKit
 
-// MARK: - Mapa propio
-// Jose importa una captura de SU mapa (del PS5); la imagen se queda solo en el teléfono
-// (Application Support), nunca en el repo. Encima van sus pines, y desde cada pin le pide
-// a Marisol una pista sin spoilers con el recorte del mapa adjunto.
+// MARK: - Mapa
+// El mapa es la página de GTABase (gtabase.com/gta-6/map) abierta dentro de la app, como en un navegador,
+// pero mostrando solo el mapa: sin sus pines, menús ni el resto de la página. No se copia ni se guarda nada
+// de su mapa en la app ni en el repo. Encima van los pines de Pockit.
 
 enum PinKind: String, CaseIterable, Identifiable {
     case pin, secreto, coleccionable, foto, negocio
@@ -19,6 +19,15 @@ enum PinKind: String, CaseIterable, Identifiable {
         case .negocio: return "dollarsign.circle.fill"
         }
     }
+    var emoji: String {
+        switch self {
+        case .pin: return "📍"
+        case .secreto: return "❓"
+        case .coleccionable: return "⭐️"
+        case .foto: return "📸"
+        case .negocio: return "💵"
+        }
+    }
     var color: UIColor {
         switch self {
         case .pin: return UIColor(Theme.pink)
@@ -26,6 +35,15 @@ enum PinKind: String, CaseIterable, Identifiable {
         case .coleccionable: return UIColor(Theme.sunset)
         case .foto: return UIColor(Theme.switchPink)
         case .negocio: return UIColor(Theme.coral)
+        }
+    }
+    var hex: String {
+        switch self {
+        case .pin: return "#FF3E8A"
+        case .secreto: return "#2EC4B6"
+        case .coleccionable: return "#FFB547"
+        case .foto: return "#CB84F8"
+        case .negocio: return "#FF7A45"
         }
     }
     func title(_ t: L10n) -> String {
@@ -39,46 +57,129 @@ enum PinKind: String, CaseIterable, Identifiable {
     }
 }
 
-enum MapImageStore {
-    static let url: URL = {
-        let dir = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask)[0]
-        try? FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
-        return dir.appendingPathComponent("pockit-map.jpg")
-    }()
-    static func load() -> UIImage? { UIImage(contentsOfFile: url.path) }
-    static func save(_ data: Data) -> UIImage? {
-        guard let img = UIImage(data: data) else { return nil }
-        // Se guarda como JPEG de hasta 4096 px pa' que no pese de más.
-        let maxSide: CGFloat = 4096
-        let scale = min(1, maxSide / max(img.size.width, img.size.height))
-        let size = CGSize(width: img.size.width * scale, height: img.size.height * scale)
-        let fmt = UIGraphicsImageRendererFormat(); fmt.scale = 1
-        let out = UIGraphicsImageRenderer(size: size, format: fmt).image { _ in img.draw(in: CGRect(origin: .zero, size: size)) }
-        try? out.jpegData(compressionQuality: 0.88)?.write(to: url, options: .atomic)
-        return out
-    }
-    static func remove() { try? FileManager.default.removeItem(at: url) }
 
-    /// Recorte alrededor del pin con un círculo rosa, pa' mandárselo a Marisol.
-    static func crop(_ img: UIImage, at p: CGPoint) -> Data? {
-        let W = img.size.width, H = img.size.height
-        let side = max(240, min(W, H) * 0.28)
-        let cx = p.x * W, cy = p.y * H
-        let rect = CGRect(x: min(max(0, cx - side / 2), max(0, W - side)), y: min(max(0, cy - side / 2), max(0, H - side)),
-                          width: min(side, W), height: min(side, H))
-        let outSide: CGFloat = 900
-        let k = outSide / rect.width
-        let fmt = UIGraphicsImageRendererFormat(); fmt.scale = 1
-        let out = UIGraphicsImageRenderer(size: CGSize(width: outSide, height: rect.height * k), format: fmt).image { ctx in
-            img.draw(in: CGRect(x: -rect.minX * k, y: -rect.minY * k, width: W * k, height: H * k))
-            let c = CGPoint(x: (cx - rect.minX) * k, y: (cy - rect.minY) * k)
-            let ring = UIBezierPath(ovalIn: CGRect(x: c.x - 34, y: c.y - 34, width: 68, height: 68))
-            ring.lineWidth = 7
-            UIColor(Theme.pink).setStroke(); ring.stroke()
-            UIColor.white.setFill()
-            UIBezierPath(ovalIn: CGRect(x: c.x - 6, y: c.y - 6, width: 12, height: 12)).fill()
+/// Una sola WebView pal mapa, que se queda viva aunque cambiés de pestaña (no recarga cada vez).
+@MainActor
+final class MapWeb: NSObject, ObservableObject, WKScriptMessageHandler, WKNavigationDelegate {
+    static let shared = MapWeb()
+    static let url = URL(string: "https://www.gtabase.com/gta-6/map/")!
+
+    let webView: WKWebView
+    @Published var ready = false
+    @Published var failed = false
+    var onLongPress: ((Double, Double, String?, String?) -> Void)?
+    var onPinTap: ((UUID) -> Void)?
+    private var started = false
+    private var pendingPins: String = "[]"
+
+    override init() {
+        let cfg = WKWebViewConfiguration()
+        cfg.websiteDataStore = .default()
+        cfg.applicationNameForUserAgent = "Version/18.0 Mobile/15E148 Safari/604.1"
+        WebPerf.unlock120(cfg.preferences)
+        let ucc = WKUserContentController()
+        if let url = Bundle.main.url(forResource: "gtab-bridge", withExtension: "js"), let js = try? String(contentsOf: url, encoding: .utf8) {
+            ucc.addUserScript(WKUserScript(source: js, injectionTime: .atDocumentEnd, forMainFrameOnly: true))
         }
-        return out.jpegData(compressionQuality: 0.85)
+        cfg.userContentController = ucc
+        webView = WKWebView(frame: .zero, configuration: cfg)
+        super.init()
+        ucc.add(self, name: "pockitMap")
+        webView.navigationDelegate = self
+        webView.isOpaque = false
+        webView.backgroundColor = UIColor(red: 0x2F/255, green: 0x90/255, blue: 0xB0/255, alpha: 1)
+        webView.scrollView.isScrollEnabled = false
+        webView.scrollView.bounces = false
+        webView.scrollView.contentInsetAdjustmentBehavior = .never
+        webView.allowsLinkPreview = false
+    }
+
+    func start() {
+        guard !started else { return }
+        started = true
+        failed = false
+        webView.load(URLRequest(url: Self.url))
+    }
+    func reload() { ready = false; failed = false; webView.load(URLRequest(url: Self.url)) }
+
+    func setPins(_ pins: [MapPin]) {
+        let arr: [[String: Any]] = pins.map { p in
+            let k = PinKind(rawValue: p.kind) ?? .pin
+            return ["id": p.id.uuidString, "lat": p.y, "lng": p.x, "emoji": k.emoji, "color": k.hex, "done": p.done]
+        }
+        let json = String(data: (try? JSONSerialization.data(withJSONObject: arr)) ?? Data("[]".utf8), encoding: .utf8) ?? "[]"
+        pendingPins = json
+        if ready { webView.evaluateJavaScript("window.pkSetPins && window.pkSetPins(\(json))") }
+    }
+
+    func flyTo(_ p: MapPin) { webView.evaluateJavaScript("window.pkFlyTo && window.pkFlyTo(\(p.y), \(p.x))") }
+
+    /// Centra el pin, espera a que carguen los cuadritos del mapa y le toma foto (pa' mandársela a Marisol).
+    func snapshot(of p: MapPin) async -> (Data?, String?, String?) {
+        let view = try? await webView.evaluateJavaScript("JSON.stringify(window.pkView ? window.pkView() : null)") as? String
+        let near = try? await webView.evaluateJavaScript("JSON.stringify(window.pkFocus(\(p.y), \(p.x), 4))") as? String
+        try? await Task.sleep(for: .milliseconds(900))
+        let cfg = WKSnapshotConfiguration()
+        let img = try? await webView.takeSnapshot(configuration: cfg)
+        if let view, let d = view.data(using: .utf8), let v = try? JSONSerialization.jsonObject(with: d) as? [String: Double],
+           let lat = v["lat"], let lng = v["lng"], let z = v["zoom"] {
+            _ = try? await webView.evaluateJavaScript("window.pkSetView(\(lat), \(lng), \(z))")
+        }
+        var place: String?, county: String?
+        if let near, let d = near.data(using: .utf8), let o = try? JSONSerialization.jsonObject(with: d) as? [String: Any] {
+            place = o["place"] as? String; county = o["county"] as? String
+        }
+        return (img?.jpegData(compressionQuality: 0.82), place, county)
+    }
+
+    func userContentController(_ c: WKUserContentController, didReceive m: WKScriptMessage) {
+        guard let d = m.body as? [String: Any], let type = d["type"] as? String else { return }
+        switch type {
+        case "ready":
+            ready = true
+            webView.evaluateJavaScript("window.pkSetPins && window.pkSetPins(\(pendingPins))")
+        case "error":
+            failed = true
+        case "longPress":
+            let near = d["near"] as? [String: Any]
+            UIImpactFeedbackGenerator(style: .medium).impactOccurred()
+            onLongPress?(d["lat"] as? Double ?? 0, d["lng"] as? Double ?? 0, near?["place"] as? String, near?["county"] as? String)
+        case "pinTap":
+            if let s = d["id"] as? String, let id = UUID(uuidString: s) {
+                UIImpactFeedbackGenerator(style: .light).impactOccurred()
+                onPinTap?(id)
+            }
+        default: break
+        }
+    }
+
+    // Solo el mapa: cualquier otro enlace (anuncios, menús) no navega.
+    func webView(_ webView: WKWebView, decidePolicyFor action: WKNavigationAction) async -> WKNavigationActionPolicy {
+        guard action.targetFrame?.isMainFrame ?? false else { return .allow }
+        if let u = action.request.url, u.host?.hasSuffix("gtabase.com") == true, u.path.hasPrefix("/gta-6/map") { return .allow }
+        return action.navigationType == .other ? .allow : .cancel
+    }
+    func webView(_ webView: WKWebView, didFail navigation: WKNavigation!, withError error: Error) { failed = true }
+    func webView(_ webView: WKWebView, didFailProvisionalNavigation navigation: WKNavigation!, withError error: Error) { failed = true }
+}
+
+struct MapWebContainer: UIViewRepresentable {
+    let web: WKWebView
+    func makeUIView(context: Context) -> UIView {
+        let v = UIView()
+        v.backgroundColor = web.backgroundColor
+        return v
+    }
+    func updateUIView(_ v: UIView, context: Context) {
+        if web.superview !== v {
+            web.removeFromSuperview()
+            web.translatesAutoresizingMaskIntoConstraints = false
+            v.addSubview(web)
+            NSLayoutConstraint.activate([
+                web.leadingAnchor.constraint(equalTo: v.leadingAnchor), web.trailingAnchor.constraint(equalTo: v.trailingAnchor),
+                web.topAnchor.constraint(equalTo: v.topAnchor), web.bottomAnchor.constraint(equalTo: v.bottomAnchor)
+            ])
+        }
     }
 }
 
@@ -87,82 +188,98 @@ struct MapaView: View {
     @EnvironmentObject private var store: PockitStore
     @EnvironmentObject private var state: PockitState
     @EnvironmentObject private var web: WebModel
+    @ObservedObject private var map = MapWeb.shared
 
-    @State private var image: UIImage? = MapImageStore.load()
-    @State private var photoItem: PhotosPickerItem?
-    @State private var showPicker = false
     @State private var editing: MapPin?
+    @State private var editingNear: (String?, String?) = (nil, nil)
     @State private var filter: PinKind?
     @State private var showList = false
-    @State private var confirmReplace = false
 
     var body: some View {
         let t = settings.t
         NavigationStack {
-            Group {
-                if let image {
-                    ZoomableMap(image: image, pins: visiblePins, onLongPress: { p in
-                        editing = MapPin(x: p.x, y: p.y, name: "", kind: (filter ?? .pin).rawValue)
-                    }, onTapPin: { pin in editing = pin })
+            ZStack {
+                MapWebContainer(web: map.webView)
                     .ignoresSafeArea(edges: .bottom)
-                    .overlay(alignment: .top) { filterBar(t) }
-                    .overlay(alignment: .bottom) {
-                        if store.data.pins.isEmpty {
-                            Text(t.s("Mantené presionado en el mapa pa' poner un pin", "Long-press the map to drop a pin"))
-                                .font(Theme.text(13, .medium)).foregroundStyle(.white)
-                                .padding(.horizontal, 14).padding(.vertical, 8)
-                                .background(Capsule().fill(.ultraThinMaterial))
-                                .padding(.bottom, 100)
+                if !map.ready {
+                    VStack(spacing: 12) {
+                        if map.failed {
+                            Image(systemName: "wifi.exclamationmark").font(.system(size: 34)).foregroundStyle(.white)
+                            Text(t.s("No pude abrir el mapa. ¿Tenés internet?", "Couldn't open the map. Are you online?"))
+                                .font(Theme.text(15)).foregroundStyle(.white)
+                            Button(t.s("Reintentar", "Retry")) { map.reload() }.buttonStyle(.borderedProminent)
+                        } else {
+                            ProgressView().tint(.white)
+                            Text(t.s("Abriendo el mapa de Leonida…", "Opening the Leonida map…")).font(Theme.text(14)).foregroundStyle(.white)
                         }
                     }
-                } else {
-                    emptyState(t)
+                    .frame(maxWidth: .infinity, maxHeight: .infinity)
+                    .background(Color(red: 0x2F/255, green: 0x90/255, blue: 0xB0/255))
                 }
             }
-            .background(Theme.menu.ignoresSafeArea())
+            .overlay(alignment: .top) { if map.ready { filterBar(t) } }
+            .overlay(alignment: .bottom) {
+                if map.ready && store.data.pins.filter({ $0.space == "gtab" }).isEmpty {
+                    Text(t.s("Mantené presionado en el mapa pa' poner un pin", "Long-press the map to drop a pin"))
+                        .font(Theme.text(13, .medium)).foregroundStyle(.white)
+                        .padding(.horizontal, 14).padding(.vertical, 8)
+                        .background(Capsule().fill(.ultraThinMaterial))
+                        .padding(.bottom, 100)
+                }
+            }
+            .overlay(alignment: .bottomTrailing) {
+                if map.ready {
+                    Link(destination: MapWeb.url) {
+                        Text("Mapa: GTABase.com").font(Theme.text(10, .medium)).foregroundStyle(.white.opacity(0.8))
+                            .padding(.horizontal, 8).padding(.vertical, 4)
+                            .background(Capsule().fill(Color.black.opacity(0.25)))
+                    }
+                    .padding(.trailing, 10).padding(.bottom, 92)
+                }
+            }
             .navigationTitle(t.s("MAPA", "MAP"))
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
-                if image != nil {
-                    ToolbarItem(placement: .topBarLeading) {
-                        Button { showList = true } label: { Image(systemName: "list.bullet") }
-                            .accessibilityLabel(t.s("Lista de pines", "Pin list"))
-                    }
-                    ToolbarItem(placement: .primaryAction) {
-                        Menu {
-                            Button { confirmReplace = true } label: { Label(t.s("Cambiar imagen del mapa", "Replace map image"), systemImage: "photo") }
-                        } label: { Image(systemName: "ellipsis.circle") }
-                    }
+                ToolbarItem(placement: .topBarLeading) {
+                    Button { showList = true } label: { Image(systemName: "list.bullet") }
+                        .accessibilityLabel(t.s("Lista de pines", "Pin list"))
                 }
             }
-            .photosPicker(isPresented: $showPicker, selection: $photoItem, matching: .images)
-            .onChange(of: photoItem) { _, item in
-                guard let item else { return }
-                Task {
-                    if let data = try? await item.loadTransferable(type: Data.self) { image = MapImageStore.save(data) }
-                    photoItem = nil
+            .onAppear {
+                map.start()
+                map.onLongPress = { lat, lng, place, county in
+                    var p = MapPin(x: lng, y: lat, name: "", kind: (filter ?? .pin).rawValue)
+                    p.note = ""
+                    editingNear = (place, county)
+                    editing = p
                 }
+                map.onPinTap = { id in
+                    if let p = store.data.pins.first(where: { $0.id == id }) { editingNear = (nil, nil); editing = p }
+                }
+                pushPins()
             }
-            .confirmationDialog(t.s("¿Cambiar la imagen? Los pines se quedan donde están.", "Replace the image? Pins stay where they are."),
-                                isPresented: $confirmReplace, titleVisibility: .visible) {
-                Button(t.s("Elegir otra imagen", "Choose another image")) { showPicker = true }
-                Button(t.cancel, role: .cancel) {}
-            }
+            .onChange(of: store.data.pins) { _, _ in pushPins() }
+            .onChange(of: filter) { _, _ in pushPins() }
+            .onChange(of: map.ready) { _, _ in pushPins() }
             .sheet(item: $editing) { pin in
-                PinSheet(pin: pin, image: image) { editing = nil }
+                PinSheet(pin: pin, place: editingNear.0, county: editingNear.1) { editing = nil }
                     .environmentObject(settings).environmentObject(store).environmentObject(state).environmentObject(web)
                     .presentationDetents([.medium, .large])
             }
             .sheet(isPresented: $showList) {
-                PinListSheet { pin in showList = false; DispatchQueue.main.asyncAfter(deadline: .now() + 0.35) { editing = pin } }
-                    .environmentObject(settings).environmentObject(store)
-                    .presentationDetents([.medium, .large])
+                PinListSheet { pin in
+                    showList = false
+                    map.flyTo(pin)
+                    DispatchQueue.main.asyncAfter(deadline: .now() + 0.7) { editingNear = (nil, nil); editing = pin }
+                }
+                .environmentObject(settings).environmentObject(store)
+                .presentationDetents([.medium, .large])
             }
         }
     }
 
-    private var visiblePins: [MapPin] {
-        store.data.pins.filter { filter == nil || $0.kind == filter!.rawValue }
+    private func pushPins() {
+        map.setPins(store.data.pins.filter { $0.space == "gtab" && (filter == nil || $0.kind == filter!.rawValue) })
     }
 
     private func filterBar(_ t: L10n) -> some View {
@@ -170,49 +287,27 @@ struct MapaView: View {
             HStack(spacing: 8) {
                 chip(t.s("Todos", "All"), on: filter == nil) { filter = nil }
                 ForEach(PinKind.allCases) { k in
-                    chip(k.title(t), symbol: k.symbol, color: Color(k.color), on: filter == k) { filter = filter == k ? nil : k }
+                    chip(k.title(t), emoji: k.emoji, on: filter == k) { filter = filter == k ? nil : k }
                 }
             }
             .padding(.horizontal, 12).padding(.vertical, 8)
         }
     }
 
-    private func chip(_ title: String, symbol: String? = nil, color: Color = .white, on: Bool, action: @escaping () -> Void) -> some View {
+    private func chip(_ title: String, emoji: String? = nil, on: Bool, action: @escaping () -> Void) -> some View {
         Button(action: action) {
             HStack(spacing: 5) {
-                if let symbol { Image(systemName: symbol).foregroundStyle(color) }
+                if let emoji { Text(emoji) }
                 Text(title)
             }
             .font(Theme.text(13, .semibold))
             .foregroundStyle(.white)
             .padding(.horizontal, 12).frame(height: 32)
-            .background(Capsule().fill(on ? Theme.purple : Theme.nightDeep.opacity(0.55)))
+            .background(Capsule().fill(on ? Theme.purple : Theme.nightDeep.opacity(0.6)))
             .background(Capsule().fill(.ultraThinMaterial))
             .overlay(Capsule().stroke(on ? Theme.switchPink : Color.white.opacity(0.18), lineWidth: 1))
         }
         .buttonStyle(.plain)
-    }
-
-    private func emptyState(_ t: L10n) -> some View {
-        VStack(spacing: 16) {
-            Spacer()
-            Image("TabColor_mapa").resizable().scaledToFit().frame(width: 110, height: 110)
-            Text(t.s("TU MAPA DE LEONIDA", "YOUR LEONIDA MAP")).font(Theme.display(28)).foregroundStyle(.white)
-            Text(t.s("Tomale un screenshot al mapa en el PS5 (o una foto a la tele) y subilo. Después mantené presionado pa' poner pines, y desde cada pin le pedís a Marisol una pista sin spoilers.",
-                     "Take a screenshot of the map on your PS5 (or a photo of the TV) and import it. Then long-press to drop pins, and ask Marisol for a spoiler-free hint from any pin."))
-                .font(Theme.text(15)).foregroundStyle(Theme.lilac).multilineTextAlignment(.center).padding(.horizontal, 36)
-            Button { showPicker = true } label: {
-                Label(t.s("Importar mi mapa", "Import my map"), systemImage: "photo.on.rectangle")
-                    .font(Theme.text(17, .semibold)).foregroundStyle(Theme.nightDeep)
-                    .padding(.horizontal, 22).frame(height: 48)
-                    .background(Capsule().fill(Theme.switchPink))
-            }
-            .buttonStyle(.plain)
-            Text(t.s("La imagen se queda solo en este teléfono.", "The image stays on this phone only."))
-                .font(Theme.text(12)).foregroundStyle(Theme.lilac.opacity(0.7))
-            Spacer(); Spacer()
-        }
-        .frame(maxWidth: .infinity)
     }
 }
 
@@ -223,7 +318,8 @@ struct PinSheet: View {
     @EnvironmentObject private var state: PockitState
     @EnvironmentObject private var web: WebModel
     @State var pin: MapPin
-    let image: UIImage?
+    let place: String?
+    let county: String?
     let close: () -> Void
     @State private var asking = false
 
@@ -234,24 +330,24 @@ struct PinSheet: View {
         NavigationStack {
             Form {
                 Section {
-                    TextField(t.s("Nombre (ej. muelle de Port Gellhorn)", "Name (e.g. the old pier)"), text: $pin.name)
+                    TextField(t.s("Nombre (ej. muelle viejo)", "Name (e.g. the old pier)"), text: $pin.name)
                     TextField(t.s("Nota", "Note"), text: $pin.note, axis: .vertical).lineLimit(1...4)
                     Picker(t.s("Tipo", "Type"), selection: $pin.kind) {
-                        ForEach(PinKind.allCases) { k in Label(k.title(t), systemImage: k.symbol).tag(k.rawValue) }
+                        ForEach(PinKind.allCases) { k in Text("\(k.emoji) \(k.title(t))").tag(k.rawValue) }
                     }
                     Toggle(t.s("Ya lo hice", "Done"), isOn: $pin.done)
+                } footer: {
+                    if let where_ = [place, county].compactMap({ $0 }).joined(separator: " · ").nilIfEmpty {
+                        Text(t.s("Cerca de: ", "Near: ") + where_)
+                    }
                 }
                 .listRowBackground(Theme.panel)
 
                 Section {
-                    Button { ask(hint: true) } label: {
-                        Label(t.s("Pista sin spoilers", "Spoiler-free hint"), systemImage: "sparkles")
-                    }
-                    Button { ask(hint: false) } label: {
-                        Label(t.s("¿Qué hay por aquí?", "What's around here?"), systemImage: "binoculars.fill")
-                    }
+                    Button { ask(hint: true) } label: { Label(t.s("Pista sin spoilers", "Spoiler-free hint"), systemImage: "sparkles") }
+                    Button { ask(hint: false) } label: { Label(t.s("¿Qué hay por aquí?", "What's around here?"), systemImage: "binoculars.fill") }
                 } footer: {
-                    Text(t.s("Le mando a Marisol un recorte del mapa con el punto marcado.", "Marisol gets a crop of your map with the spot marked."))
+                    Text(t.s("Le mando a Marisol una foto del mapa con tu pin y la zona.", "Marisol gets a picture of the map with your pin and the area."))
                 }
                 .listRowBackground(Theme.panel)
                 .disabled(asking)
@@ -265,17 +361,20 @@ struct PinSheet: View {
             }
             .scrollContentBackground(.hidden)
             .background(Theme.menu.ignoresSafeArea())
-            .navigationTitle(isNew ? t.s("Nuevo pin", "New pin") : (pin.name.isEmpty ? t.s("Pin", "Pin") : pin.name))
+            .navigationTitle(isNew ? t.s("Nuevo pin", "New pin") : (pin.name.isEmpty ? "Pin" : pin.name))
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) { Button(t.cancel) { close() } }
                 ToolbarItem(placement: .confirmationAction) { Button(t.s("Guardar", "Save")) { save(); close() } }
             }
+            .overlay { if asking { ProgressView().tint(.white).padding(20).background(RoundedRectangle(cornerRadius: 14).fill(.ultraThinMaterial)) } }
         }
     }
 
     private func save() {
-        if pin.name.trimmingCharacters(in: .whitespaces).isEmpty { pin.name = PinKind(rawValue: pin.kind)?.title(settings.t) ?? "Pin" }
+        if pin.name.trimmingCharacters(in: .whitespaces).isEmpty {
+            pin.name = place ?? PinKind(rawValue: pin.kind)?.title(settings.t) ?? "Pin"
+        }
         store.savePin(pin)
     }
 
@@ -283,28 +382,31 @@ struct PinSheet: View {
         let t = settings.t
         save()
         asking = true
-        let place = pin.name + (pin.note.isEmpty ? "" : " (\(pin.note))")
-        let kind = PinKind(rawValue: pin.kind) ?? .pin
-        let msg: String
-        if hint {
-            switch kind {
-            case .secreto:
-                msg = t.s("📍 Mapa: ¿hay algún secreto cerca de este punto (\(place))? Dame solo la Pista 1, sin spoilers. Te adjunto el recorte de mi mapa con el punto en rosa.",
-                          "📍 Map: is there a secret near this spot (\(place))? Just Pista 1, no spoilers. Attached is a crop of my map with the spot in pink.")
-            case .coleccionable:
-                msg = t.s("📍 Mapa: ¿hay coleccionables cerca de este punto (\(place))? Primero solo una pista, sin spoilers. Te adjunto el recorte de mi mapa con el punto en rosa.",
-                          "📍 Map: any collectibles near this spot (\(place))? Just a hint first, no spoilers. Attached is a crop of my map with the spot in pink.")
-            default:
-                msg = t.s("📍 Mapa: dame una pista sin spoilers de algo que valga la pena cerca de este punto (\(place)). Te adjunto el recorte de mi mapa con el punto en rosa.",
-                          "📍 Map: give me a spoiler-free hint about something worth it near this spot (\(place)). Attached is a crop of my map with the spot in pink.")
-            }
-        } else {
-            msg = t.s("📍 Mapa: ¿qué hay por aquí (\(place))? Actividades, negocios, vistas, lo que valga la pena, sin spoilers. Te adjunto el recorte de mi mapa con el punto en rosa.",
-                      "📍 Map: what's around here (\(place))? Activities, businesses, views, anything worth it, no spoilers. Attached is a crop of my map with the spot in pink.")
-        }
+        let p = pin
         Task {
-            if let image, let data = MapImageStore.crop(image, at: CGPoint(x: pin.x, y: pin.y)) {
-                _ = await web.attach(data: data, name: "mapa-\(Int(Date().timeIntervalSince1970)).jpg", mime: "image/jpeg")
+            let (img, nearPlace, nearCounty) = await MapWeb.shared.snapshot(of: p)
+            let zone = [nearPlace ?? place, nearCounty ?? county].compactMap { $0 }.joined(separator: ", ")
+            let spot = p.name + (p.note.isEmpty ? "" : " — \(p.note)") + (zone.isEmpty ? "" : " (\(zone))")
+            let kind = PinKind(rawValue: p.kind) ?? .pin
+            let msg: String
+            if hint {
+                switch kind {
+                case .secreto:
+                    msg = t.s("📍 Mapa: ¿hay algún secreto cerca de este punto: \(spot)? Dame solo la Pista 1, sin spoilers. Te adjunto el mapa con mi pin.",
+                              "📍 Map: is there a secret near this spot: \(spot)? Just Pista 1, no spoilers. Map with my pin attached.")
+                case .coleccionable:
+                    msg = t.s("📍 Mapa: ¿hay coleccionables cerca de este punto: \(spot)? Primero solo una pista, sin spoilers. Te adjunto el mapa con mi pin.",
+                              "📍 Map: any collectibles near this spot: \(spot)? Just a hint first, no spoilers. Map with my pin attached.")
+                default:
+                    msg = t.s("📍 Mapa: dame una pista sin spoilers de algo que valga la pena cerca de este punto: \(spot). Te adjunto el mapa con mi pin.",
+                              "📍 Map: give me a spoiler-free hint about something worth it near this spot: \(spot). Map with my pin attached.")
+                }
+            } else {
+                msg = t.s("📍 Mapa: ¿qué hay por aquí: \(spot)? Actividades, negocios, vistas, lo que valga la pena, sin spoilers. Te adjunto el mapa con mi pin.",
+                          "📍 Map: what's around here: \(spot)? Activities, businesses, views, anything worth it, no spoilers. Map with my pin attached.")
+            }
+            if let img {
+                _ = await web.attach(data: img, name: "mapa-\(Int(Date().timeIntervalSince1970)).jpg", mime: "image/jpeg")
                 try? await Task.sleep(for: .milliseconds(900))
             }
             state.tab = .marisol
@@ -314,6 +416,8 @@ struct PinSheet: View {
         }
     }
 }
+
+private extension String { var nilIfEmpty: String? { isEmpty ? nil : self } }
 
 // MARK: - Lista de pines
 struct PinListSheet: View {
@@ -327,7 +431,7 @@ struct PinListSheet: View {
         NavigationStack {
             List {
                 ForEach(PinKind.allCases) { k in
-                    let pins = store.data.pins.filter { $0.kind == k.rawValue && (query.isEmpty || ($0.name + " " + $0.note).localizedCaseInsensitiveContains(query)) }
+                    let pins = store.data.pins.filter { $0.space == "gtab" && $0.kind == k.rawValue && (query.isEmpty || ($0.name + " " + $0.note).localizedCaseInsensitiveContains(query)) }
                     if !pins.isEmpty {
                         Section(k.title(t)) {
                             ForEach(pins) { p in
@@ -359,139 +463,3 @@ struct PinListSheet: View {
     }
 }
 
-// MARK: - Mapa con zoom (UIKit)
-struct ZoomableMap: UIViewRepresentable {
-    let image: UIImage
-    let pins: [MapPin]
-    let onLongPress: (CGPoint) -> Void
-    let onTapPin: (MapPin) -> Void
-
-    func makeCoordinator() -> Coordinator { Coordinator() }
-
-    func makeUIView(context: Context) -> UIScrollView {
-        let sv = UIScrollView()
-        sv.delegate = context.coordinator
-        sv.backgroundColor = UIColor(Theme.nightDeep)
-        sv.showsVerticalScrollIndicator = false
-        sv.showsHorizontalScrollIndicator = false
-        sv.bouncesZoom = true
-        sv.contentInsetAdjustmentBehavior = .never
-        let iv = UIImageView(image: image)
-        iv.isUserInteractionEnabled = true
-        iv.frame = CGRect(origin: .zero, size: image.size)
-        sv.addSubview(iv)
-        sv.contentSize = image.size
-        context.coordinator.scroll = sv
-        context.coordinator.imageView = iv
-        let lp = UILongPressGestureRecognizer(target: context.coordinator, action: #selector(Coordinator.longPress(_:)))
-        lp.minimumPressDuration = 0.45
-        iv.addGestureRecognizer(lp)
-        let dbl = UITapGestureRecognizer(target: context.coordinator, action: #selector(Coordinator.doubleTap(_:)))
-        dbl.numberOfTapsRequired = 2
-        iv.addGestureRecognizer(dbl)
-        return sv
-    }
-
-    func updateUIView(_ sv: UIScrollView, context: Context) {
-        let c = context.coordinator
-        c.parent = self
-        if c.imageView?.image !== image {
-            c.imageView?.image = image
-            c.imageView?.frame = CGRect(origin: .zero, size: image.size)
-            sv.contentSize = image.size
-            c.fitted = false
-        }
-        DispatchQueue.main.async { c.fitIfNeeded(); c.syncPins() }
-    }
-
-    final class Coordinator: NSObject, UIScrollViewDelegate {
-        var parent: ZoomableMap?
-        weak var scroll: UIScrollView?
-        weak var imageView: UIImageView?
-        var fitted = false
-        var views: [UUID: UIButton] = [:]
-
-        func viewForZooming(in scrollView: UIScrollView) -> UIView? { imageView }
-
-        func fitIfNeeded() {
-            guard !fitted, let sv = scroll, let iv = imageView, let img = iv.image, sv.bounds.width > 0 else { return }
-            let fit = min(sv.bounds.width / img.size.width, sv.bounds.height / img.size.height)
-            sv.minimumZoomScale = fit
-            sv.maximumZoomScale = max(fit * 8, 1.5)
-            sv.zoomScale = max(fit, min(1, sv.bounds.height / img.size.height))
-            fitted = true
-            center()
-        }
-
-        func center() {
-            guard let sv = scroll, let iv = imageView else { return }
-            let w = iv.frame.width, h = iv.frame.height
-            sv.contentInset = UIEdgeInsets(top: max(0, (sv.bounds.height - h) / 2), left: max(0, (sv.bounds.width - w) / 2),
-                                           bottom: max(0, (sv.bounds.height - h) / 2), right: max(0, (sv.bounds.width - w) / 2))
-        }
-
-        func scrollViewDidZoom(_ scrollView: UIScrollView) { center(); scalePins() }
-
-        func syncPins() {
-            guard let iv = imageView, let parent else { return }
-            let ids = Set(parent.pins.map(\.id))
-            for (id, v) in views where !ids.contains(id) { v.removeFromSuperview(); views[id] = nil }
-            for p in parent.pins {
-                let b = views[p.id] ?? {
-                    let nb = UIButton(type: .system)
-                    nb.addTarget(self, action: #selector(tapPin(_:)), for: .touchUpInside)
-                    iv.addSubview(nb)
-                    views[p.id] = nb
-                    return nb
-                }()
-                let kind = PinKind(rawValue: p.kind) ?? .pin
-                let cfg = UIImage.SymbolConfiguration(pointSize: 30, weight: .bold)
-                b.setImage(UIImage(systemName: p.done ? "checkmark.circle.fill" : kind.symbol, withConfiguration: cfg), for: .normal)
-                b.tintColor = kind.color
-                b.backgroundColor = .white
-                b.layer.cornerRadius = 17
-                b.layer.shadowColor = UIColor.black.cgColor
-                b.layer.shadowOpacity = 0.35
-                b.layer.shadowRadius = 4
-                b.layer.shadowOffset = CGSize(width: 0, height: 2)
-                b.alpha = p.done ? 0.7 : 1
-                b.accessibilityLabel = p.name
-                b.tag = p.id.hashValue
-                b.layer.setValue(p.id.uuidString, forKey: "pinID")
-                b.bounds = CGRect(x: 0, y: 0, width: 34, height: 34)
-                b.center = CGPoint(x: p.x * (iv.image?.size.width ?? 0), y: p.y * (iv.image?.size.height ?? 0))
-            }
-            scalePins()
-        }
-
-        /// Los pines mantienen su tamaño en pantalla aunque hagás zoom.
-        func scalePins() {
-            guard let sv = scroll else { return }
-            let k = 1 / max(sv.zoomScale, 0.0001)
-            for v in views.values { v.transform = CGAffineTransform(scaleX: k, y: k) }
-        }
-
-        @objc func tapPin(_ b: UIButton) {
-            guard let s = b.layer.value(forKey: "pinID") as? String, let id = UUID(uuidString: s),
-                  let pin = parent?.pins.first(where: { $0.id == id }) else { return }
-            UIImpactFeedbackGenerator(style: .light).impactOccurred()
-            parent?.onTapPin(pin)
-        }
-
-        @objc func longPress(_ g: UILongPressGestureRecognizer) {
-            guard g.state == .began, let iv = imageView, let img = iv.image else { return }
-            let p = g.location(in: iv)
-            UIImpactFeedbackGenerator(style: .medium).impactOccurred()
-            parent?.onLongPress(CGPoint(x: p.x / img.size.width, y: p.y / img.size.height))
-        }
-
-        @objc func doubleTap(_ g: UITapGestureRecognizer) {
-            guard let sv = scroll, let iv = imageView else { return }
-            if sv.zoomScale > sv.minimumZoomScale * 1.5 { sv.setZoomScale(sv.minimumZoomScale, animated: true); return }
-            let p = g.location(in: iv)
-            let target = min(sv.maximumZoomScale, sv.zoomScale * 2.5)
-            let w = sv.bounds.width / target, h = sv.bounds.height / target
-            sv.zoom(to: CGRect(x: p.x - w / 2, y: p.y - h / 2, width: w, height: h), animated: true)
-        }
-    }
-}

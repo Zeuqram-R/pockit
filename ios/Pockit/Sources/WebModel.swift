@@ -52,6 +52,7 @@ final class WebModel: NSObject, ObservableObject {
 
     override init() {
         let config = WKWebViewConfiguration()
+        WebPerf.unlock120(config.preferences)
         config.websiteDataStore = .default()
         config.allowsInlineMediaPlayback = true
         config.mediaTypesRequiringUserActionForPlayback = []

@@ -159,6 +159,24 @@ struct MapPin: Codable, Identifiable, Hashable {
     var kind: String = "pin"   // pin, secreto, coleccionable, foto, negocio
     var done = false
     var at = Date()
+    /// "gtab" = x/y son lng/lat del mapa de GTABase; "image" = pines viejos sobre una imagen importada.
+    var space = "gtab"
+
+    init(x: Double, y: Double, name: String, note: String = "", kind: String = "pin") {
+        self.x = x; self.y = y; self.name = name; self.note = note; self.kind = kind
+    }
+    init(from d: Decoder) throws {
+        let c = try d.container(keyedBy: CodingKeys.self)
+        id = try c.decodeIfPresent(UUID.self, forKey: .id) ?? UUID()
+        x = try c.decode(Double.self, forKey: .x)
+        y = try c.decode(Double.self, forKey: .y)
+        name = try c.decodeIfPresent(String.self, forKey: .name) ?? ""
+        note = try c.decodeIfPresent(String.self, forKey: .note) ?? ""
+        kind = try c.decodeIfPresent(String.self, forKey: .kind) ?? "pin"
+        done = try c.decodeIfPresent(Bool.self, forKey: .done) ?? false
+        at = try c.decodeIfPresent(Date.self, forKey: .at) ?? Date()
+        space = try c.decodeIfPresent(String.self, forKey: .space) ?? "image"
+    }
 }
 
 struct PockitData: Codable {

@@ -7,7 +7,7 @@ options:
 settings:
   base:
     SWIFT_VERSION: "5.0"
-    MARKETING_VERSION: "0.4.0"
+    MARKETING_VERSION: "0.4.1"
     CURRENT_PROJECT_VERSION: "1"
     TARGETED_DEVICE_FAMILY: "1,2"
     DEVELOPMENT_TEAM: ""
@@ -35,6 +35,7 @@ targets:
         ITSAppUsesNonExemptEncryption: false
         UIAppFonts: [BarlowCondensed-SemiBold.ttf, BarlowCondensed-Bold.ttf, Figtree-Regular.ttf, Figtree-Medium.ttf, Figtree-SemiBold.ttf]
         UIUserInterfaceStyle: Dark
+        CADisableMinimumFrameDurationOnPhone: true
         UIStatusBarStyle: UIStatusBarStyleLightContent
         NSCameraUsageDescription: Para tomarle foto a la tele y preguntarle a Marisol.
         NSPhotoLibraryUsageDescription: Para mandarle a Marisol un screenshot del PS5.
