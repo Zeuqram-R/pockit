@@ -60,6 +60,8 @@ final class WebModel: NSObject, ObservableObject {
         // El borde izquierdo abre el panel de conversaciones (no "atrás").
         webView.allowsBackForwardNavigationGestures = false
         webView.scrollView.contentInsetAdjustmentBehavior = .never
+        // La página del chat no debe moverse entera al scrollear con fuerza (solo el historial).
+        webView.scrollView.bounces = false
         // "Listo" y demás botones del teclado en rosa (no azul).
         webView.tintColor = UIColor(Theme.switchPink)
 
@@ -338,7 +340,7 @@ extension WebModel {
         // WebKit intenta mover toda la página pa' arriba al enfocar la caja; la dejamos quieta.
         offsetObservation = webView.scrollView.observe(\.contentOffset, options: [.new]) { [weak self] sv, _ in
             Task { @MainActor in
-                guard let self, self.keyboardUp, sv.contentOffset.y != 0 else { return }
+                guard let self, self.keyboardUp || self.isChatPage, sv.contentOffset.y != 0 else { return }
                 sv.setContentOffset(CGPoint(x: sv.contentOffset.x, y: 0), animated: false)
             }
         }
