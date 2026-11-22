@@ -21,12 +21,11 @@ struct MoneyView: View {
         NavigationStack {
             List {
                 Section {
-                    Picker("", selection: $section) {
-                        Text(t.s("Dinero", "Money")).tag(MoneySection.dinero)
-                        Text(t.s("Propiedades", "Properties")).tag(MoneySection.propiedades)
-                        Text("Garage").tag(MoneySection.garage)
-                    }
-                    .pickerStyle(.segmented)
+                    IconSegments(items: [
+                        (MoneySection.dinero, "Money", .tab(.money)),
+                        (MoneySection.propiedades, t.s("Propiedades", "Properties"), .symbol("house.fill")),
+                        (MoneySection.garage, "Garage", .symbol("car.fill")),
+                    ], selection: $section)
                     .listRowBackground(Color.clear)
                     .listRowInsets(EdgeInsets(top: 4, leading: 0, bottom: 4, trailing: 0))
                 }
@@ -160,7 +159,8 @@ struct MoneyView: View {
             }
             .scrollContentBackground(.hidden)
             .background(Theme.menu.ignoresSafeArea())
-            .navigationTitle("MONEY")
+            .fadingNavBar()
+            .navigationTitle("PORTFOLIO")
             .toolbar {
                 ToolbarItem(placement: .primaryAction) {
                     if section == .dinero {

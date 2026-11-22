@@ -79,8 +79,14 @@ enum Theme {
         edge.largeTitleTextAttributes = nav.largeTitleTextAttributes
         edge.buttonAppearance = nav.buttonAppearance
         edge.doneButtonAppearance = nav.doneButtonAppearance
-        UINavigationBar.appearance().standardAppearance = nav
-        UINavigationBar.appearance().compactAppearance = nav
+        // La transición la hace SwiftUI (fadingNavBar): UIKit queda transparente pa' que no salte de golpe.
+        if #available(iOS 18.0, *) {
+            UINavigationBar.appearance().standardAppearance = edge
+            UINavigationBar.appearance().compactAppearance = edge
+        } else {
+            UINavigationBar.appearance().standardAppearance = nav
+            UINavigationBar.appearance().compactAppearance = nav
+        }
         UINavigationBar.appearance().scrollEdgeAppearance = edge
 
         let seg = UISegmentedControl.appearance()

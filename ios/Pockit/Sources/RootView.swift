@@ -31,10 +31,6 @@ struct RootView: View {
                             .overlay {
                                 if web.isNewChat { NewChatView() }
                             }
-                            // En una conversación: caja de escribir nativa estilo iMessage.
-                            .overlay(alignment: .bottom) {
-                                if web.isChatPage && skin.chatActive { ChatComposerBar() }
-                            }
                             // Deslizar desde el borde izquierdo abre el panel de conversaciones.
                             .overlay(alignment: .leading) {
                                 Color.clear

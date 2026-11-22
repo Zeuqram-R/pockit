@@ -36,6 +36,7 @@ struct PendientesView: View {
             .scrollContentBackground(.hidden)
             .background(Theme.menu.ignoresSafeArea())
             .searchable(text: $query, placement: .navigationBarDrawer(displayMode: .automatic), prompt: t.s("Buscar", "Search"))
+            .fadingNavBar()
             .navigationTitle(t.s("PENDIENTES", "TO-DO"))
             .toolbar {
                 ToolbarItem(placement: .primaryAction) {

@@ -131,6 +131,7 @@ struct SettingsView: View {
             }
             .scrollContentBackground(.hidden)
             .background(Theme.menu.ignoresSafeArea())
+            .fadingNavBar()
             .navigationTitle(t.settings)
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {

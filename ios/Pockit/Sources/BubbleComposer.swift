@@ -96,7 +96,8 @@ struct BubbleComposer: View {
         let longest = text.split(separator: "\n", omittingEmptySubsequences: false)
             .map { (String($0) as NSString).size(withAttributes: [.font: Self.font]).width }
             .max() ?? 0
-        return min(max(longest + 34, 64), maxW)
+        // Padding (28) + margen pa' el cursor y el redondeo de la letra (18): así la palabra no salta de renglón.
+        return min(max(ceil(longest) + 46, 64), maxW)
     }
 
     @ViewBuilder private func sendOrStop(_ t: L10n) -> some View {

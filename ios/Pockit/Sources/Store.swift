@@ -166,6 +166,7 @@ struct PockitData: Codable {
     var activities: [ActivityCategory] = []
     var vehicles: [Vehicle] = []
     var seededV4 = false
+    var seededV5 = false
     var updatedAt = Date()
 
     init() {}
@@ -189,6 +190,7 @@ struct PockitData: Codable {
         activities = try c.decodeIfPresent([ActivityCategory].self, forKey: .activities) ?? []
         vehicles = try c.decodeIfPresent([Vehicle].self, forKey: .vehicles) ?? []
         seededV4 = try c.decodeIfPresent(Bool.self, forKey: .seededV4) ?? false
+        seededV5 = try c.decodeIfPresent(Bool.self, forKey: .seededV5) ?? false
         updatedAt = try c.decodeIfPresent(Date.self, forKey: .updatedAt) ?? Date()
     }
 }
@@ -232,6 +234,17 @@ final class PockitStore: ObservableObject {
         if !data.seededV2 { seedV2() }
         if !data.seededV3 { seedV3() }
         if !data.seededV4 { seedV4() }
+        if !data.seededV5 {
+            mutate { d in
+                if let i = d.vehicles.firstIndex(where: { $0.name == "Bombora S23" }) { d.vehicles[i].kind = "boat" }
+                for c in d.activities.indices {
+                    for i in d.activities[c].items.indices where d.activities[c].items[i].name == "Rodgers Ranch ??? Range" {
+                        d.activities[c].items[i].name = "Rodgers Ranch Hunting Range"
+                    }
+                }
+                d.seededV5 = true
+            }
+        }
     }
 
     /// 21 nov: Challenges, Activities (solo lo que mide avance) y Garage, como los contó Jose.
@@ -274,7 +287,7 @@ final class PockitStore: ObservableObject {
             ActivityCategory(name: "Shooting Ranges", items: [
                 ActivityItem(name: "Rodgers Ranch & Shooting Range", stats: [st("Ranges unlocked", 0, 6), st("Medals", 0, 12)]),
                 range("Rodgers Ranch Saloon Range", "Beginner", time: false),
-                range("Rodgers Ranch ??? Range", "Beginner", time: false),
+                range("Rodgers Ranch Hunting Range", "Beginner", time: false),
                 range("Rodgers Ranch Zombie Range", "Beginner", time: false),
                 range("Rodgers Ranch Cops & Robbers Range", "Beginner", time: false),
                 range("Rodgers Ranch Market Range", "Beginner", time: false),
@@ -300,7 +313,7 @@ final class PockitStore: ObservableObject {
         let vehicles = [
             Vehicle(name: "'70 Vapid Ganado", kind: "car", location: home, notes: "Ultimate Edition: Retro Build gratis en Coastal Auto Care (Key Lento), en Full Kits / Pro Builds. Solo se usa en el Chapter 1."),
             Vehicle(name: "Dinka Enduro", kind: "moto", location: home, notes: "Ultimate Edition (army fatigue). Solo se usa en el Chapter 1."),
-            Vehicle(name: "Bombora S23", kind: "other", location: home),
+            Vehicle(name: "Bombora S23", kind: "boat", location: home),
             Vehicle(name: "Bicicleta", kind: "bike", location: home, notes: "Viene con la casa del inicio."),
         ]
         mutate { d in

@@ -16,12 +16,11 @@ struct CollectiblesView: View {
         NavigationStack {
             List {
                 Section {
-                    Picker("", selection: $section) {
-                        Text("Collections").tag(ProgressSection.collections)
-                        Text("Challenges").tag(ProgressSection.challenges)
-                        Text("Activities").tag(ProgressSection.activities)
-                    }
-                    .pickerStyle(.segmented)
+                    IconSegments(items: [
+                        (ProgressSection.collections, "Collections", .tab(.collectibles)),
+                        (ProgressSection.challenges, "Challenges", .symbol("flag.checkered")),
+                        (ProgressSection.activities, "Activities", .symbol("figure.run")),
+                    ], selection: $section)
                     .listRowBackground(Color.clear)
                     .listRowInsets(EdgeInsets(top: 4, leading: 0, bottom: 4, trailing: 0))
                 }
@@ -94,6 +93,7 @@ struct CollectiblesView: View {
             }
             .scrollContentBackground(.hidden)
             .background(Theme.menu.ignoresSafeArea())
+            .fadingNavBar()
             .navigationTitle("PROGRESS")
             .toolbar {
                 ToolbarItem(placement: .primaryAction) {

@@ -87,6 +87,7 @@ struct MiPartidaView: View {
             }
             .scrollContentBackground(.hidden)
             .background(Theme.menu.ignoresSafeArea())
+            .fadingNavBar()
             .navigationTitle(t.s("MI PARTIDA", "MY GAME"))
             .toolbar {
                 ToolbarItem(placement: .confirmationAction) { Button(t.done) { dismiss() } }
