@@ -417,7 +417,6 @@ struct PinSheet: View {
     }
 }
 
-private extension String { var nilIfEmpty: String? { isEmpty ? nil : self } }
 
 // MARK: - Lista de pines
 struct PinListSheet: View {
