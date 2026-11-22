@@ -89,6 +89,9 @@ enum Theme {
         }
         UINavigationBar.appearance().scrollEdgeAppearance = edge
 
+        // Botón "Listo" del teclado y barras de herramientas en rosa.
+        UIToolbar.appearance().tintColor = UIColor(switchPink)
+
         let seg = UISegmentedControl.appearance()
         seg.selectedSegmentTintColor = UIColor(switchPink)
         seg.backgroundColor = UIColor(nightDeep).withAlphaComponent(0.6)

@@ -63,10 +63,14 @@ struct IconSegments<T: Hashable>: View {
 struct FadingNavBar: ViewModifier {
     var title: String? = nil
     @State private var progress: CGFloat = 0
+    @State private var barHeight: CGFloat = 0
 
     func body(content: Content) -> some View {
         if #available(iOS 18.0, *) {
             content
+                .onScrollGeometryChange(for: CGFloat.self) { g in g.contentInsets.top } action: { _, top in
+                    barHeight = top
+                }
                 .onScrollGeometryChange(for: CGFloat.self) { g in
                     g.contentOffset.y + g.contentInsets.top
                 } action: { _, y in
@@ -77,7 +81,7 @@ struct FadingNavBar: ViewModifier {
                 // La barra del sistema queda siempre transparente (si le pasamos un color transparente, iOS pone
                 // su barra gris por defecto). El fondo que se oscurece lo dibujamos nosotros, debajo de los títulos.
                 .toolbarBackground(.hidden, for: .navigationBar)
-                .overlay(alignment: .top) { NavFadeBackground(progress: progress) }
+                .overlay(alignment: .top) { NavFadeBackground(progress: progress, barHeight: barHeight) }
                 .modifier(InlineFadingTitle(title: title, progress: progress))
         } else {
             if let title { content.navigationTitle(title) } else { content }
@@ -87,11 +91,13 @@ struct FadingNavBar: ViewModifier {
 
 private struct NavFadeBackground: View {
     let progress: CGFloat
+    let barHeight: CGFloat
     var body: some View {
         GeometryReader { g in
             VStack(spacing: 0) {
+                // Alto = barra + zona de la hora (en hojas como Ajustes no hay zona de la hora).
                 Rectangle().fill(Theme.nightDeep.opacity(0.88 * progress))
-                    .frame(height: g.safeAreaInsets.top)
+                    .frame(height: max(barHeight, g.safeAreaInsets.top))
                 Rectangle().fill(Color.white.opacity(0.12 * progress))
                     .frame(height: 0.5)
                 Spacer(minLength: 0)

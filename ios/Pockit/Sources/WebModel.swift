@@ -31,6 +31,9 @@ final class WebModel: NSObject, ObservableObject {
 
     let webView: WKWebView
     private var progressObservation: NSKeyValueObservation?
+    private var offsetObservation: NSKeyValueObservation?
+    private var keyboardTokens: [NSObjectProtocol] = []
+    private var keyboardUp = false
     private var urlObservation: NSKeyValueObservation?
 
     override init() {
@@ -55,9 +58,12 @@ final class WebModel: NSObject, ObservableObject {
         webView.scrollView.backgroundColor = UIColor(Theme.night)
         // El borde izquierdo abre el panel de conversaciones (no "atrás").
         webView.allowsBackForwardNavigationGestures = false
-        webView.scrollView.contentInsetAdjustmentBehavior = .automatic
+        webView.scrollView.contentInsetAdjustmentBehavior = .never
+        // "Listo" y demás botones del teclado en rosa (no azul).
+        webView.tintColor = UIColor(Theme.switchPink)
 
         super.init()
+        watchKeyboard()
         content.add(WeakScriptHandler(self), name: "pockit")
         webView.navigationDelegate = self
         webView.uiDelegate = self
@@ -307,5 +313,44 @@ private final class WeakScriptHandler: NSObject, WKScriptMessageHandler {
 
     func userContentController(_ controller: WKUserContentController, didReceive message: WKScriptMessage) {
         target?.receive(message.body)
+    }
+}
+
+
+// MARK: - Teclado estilo iMessage
+// La WebView no se encoge con el teclado: el historial pasa por detrás de él (que es translúcido)
+// y chat.js sube la caja de escribir justo encima del teclado.
+extension WebModel {
+    func watchKeyboard() {
+        let nc = NotificationCenter.default
+        keyboardTokens.append(nc.addObserver(forName: UIResponder.keyboardWillChangeFrameNotification, object: nil, queue: .main) { [weak self] n in
+            let end = (n.userInfo?[UIResponder.keyboardFrameEndUserInfoKey] as? CGRect) ?? .zero
+            let dur = (n.userInfo?[UIResponder.keyboardAnimationDurationUserInfoKey] as? Double) ?? 0.25
+            Task { @MainActor in self?.keyboardChanged(end: end, duration: dur) }
+        })
+        keyboardTokens.append(nc.addObserver(forName: UIResponder.keyboardWillHideNotification, object: nil, queue: .main) { [weak self] n in
+            let dur = (n.userInfo?[UIResponder.keyboardAnimationDurationUserInfoKey] as? Double) ?? 0.25
+            Task { @MainActor in self?.sendKeyboard(0, duration: dur) }
+        })
+        // WebKit intenta mover toda la página pa' arriba al enfocar la caja; la dejamos quieta.
+        offsetObservation = webView.scrollView.observe(\.contentOffset, options: [.new]) { [weak self] sv, _ in
+            Task { @MainActor in
+                guard let self, self.keyboardUp, sv.contentOffset.y != 0 else { return }
+                sv.setContentOffset(CGPoint(x: sv.contentOffset.x, y: 0), animated: false)
+            }
+        }
+    }
+
+    private func keyboardChanged(end: CGRect, duration: Double) {
+        guard let window = webView.window else { return }
+        let frame = webView.convert(webView.bounds, to: window)
+        let overlap = max(0, frame.maxY - end.minY)
+        sendKeyboard(end.minY >= window.bounds.maxY ? 0 : overlap, duration: duration)
+    }
+
+    private func sendKeyboard(_ height: CGFloat, duration: Double) {
+        keyboardUp = height > 0
+        if keyboardUp { webView.scrollView.setContentOffset(.zero, animated: false) }
+        webView.evaluateJavaScript("window.pockitKeyboard && window.pockitKeyboard(\(Int(height)), \(duration))", completionHandler: nil)
     }
 }
