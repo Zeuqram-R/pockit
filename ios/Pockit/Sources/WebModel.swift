@@ -1,5 +1,6 @@
 import SwiftUI
 import WebKit
+import ObjectiveC
 
 /// Dueño del WKWebView: lo crea una sola vez, sigue el progreso de carga y decide qué links se abren adentro.
 @MainActor
@@ -64,6 +65,7 @@ final class WebModel: NSObject, ObservableObject {
 
         super.init()
         watchKeyboard()
+        hideKeyboardAccessoryBar()
         content.add(WeakScriptHandler(self), name: "pockit")
         webView.navigationDelegate = self
         webView.uiDelegate = self
@@ -265,6 +267,7 @@ extension WebModel: WKNavigationDelegate {
     }
 
     func webView(_ webView: WKWebView, didFinish navigation: WKNavigation!) {
+        hideKeyboardAccessoryBar()
         hasLoadedOnce = true
         loadError = false
     }
@@ -352,5 +355,30 @@ extension WebModel {
         keyboardUp = height > 0
         if keyboardUp { webView.scrollView.setContentOffset(.zero, animated: false) }
         webView.evaluateJavaScript("window.pockitKeyboard && window.pockitKeyboard(\(Int(height)), \(duration))", completionHandler: nil)
+    }
+}
+
+
+// MARK: - Sin la barra de flechitas / "Listo" encima del teclado (como en iMessage)
+extension WebModel {
+    /// WKWebView pone una barra (anterior / siguiente / Listo) encima del teclado. Se quita cambiando la clase de su
+    /// vista de contenido por una subclase cuyo inputAccessoryView es nil. Si algo falla, simplemente queda la barra.
+    func hideKeyboardAccessoryBar() {
+        guard let content = webView.scrollView.subviews.first(where: { String(describing: type(of: $0)).hasPrefix("WKContent") }),
+              let baseClass = object_getClass(content) else { return }
+        let baseName = String(cString: class_getName(baseClass))
+        if baseName.hasSuffix("_PockitNoBar") { return }
+        let newName = baseName + "_PockitNoBar"
+        var newClass: AnyClass? = NSClassFromString(newName)
+        if newClass == nil {
+            guard let made = objc_allocateClassPair(baseClass, newName, 0) else { return }
+            let block: @convention(block) (AnyObject) -> UIView? = { _ in nil }
+            let imp = imp_implementationWithBlock(block)
+            let sel = #selector(getter: UIResponder.inputAccessoryView)
+            class_addMethod(made, sel, imp, "@@:")
+            objc_registerClassPair(made)
+            newClass = made
+        }
+        if let newClass { object_setClass(content, newClass) }
     }
 }
