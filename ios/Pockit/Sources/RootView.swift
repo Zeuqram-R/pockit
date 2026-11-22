@@ -27,6 +27,10 @@ struct RootView: View {
                         TopBar(onSettings: { showSettings = true }, onAvatar: { showPartida = true }, onChats: { showChats = true })
                         QuickBar()
                         WebContainer(webView: web.webView)
+                            // Conversación nueva: vista nativa encima de la página del proyecto.
+                            .overlay {
+                                if web.isNewChat { NewChatView() }
+                            }
                             // Deslizar desde el borde izquierdo abre el panel de conversaciones.
                             .overlay(alignment: .leading) {
                                 Color.clear

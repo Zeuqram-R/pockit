@@ -69,7 +69,24 @@ final class WebModel: NSObject, ObservableObject {
         }
         // Inspectable desde Safari en la Mac: así se ajusta el skin si claude.ai cambia.
         if #available(iOS 16.4, *) { webView.isInspectable = true }
-        loadHome()
+        // Al abrir Pockit se retoma la última conversación (como iMessage); si no hay, conversación nueva.
+        if let last = UserDefaults.standard.string(forKey: Self.lastChatKey), let url = URL(string: "https://claude.ai" + last) {
+            webView.load(URLRequest(url: url))
+        } else {
+            loadHome()
+        }
+    }
+
+    static let lastChatKey = "pockit.lastChatPath"
+
+    /// Pantalla de conversación nueva (página del proyecto, tapada por la vista nativa).
+    var isNewChat: Bool { currentPath.hasPrefix("/project/") }
+
+    /// Adjunta un archivo al composer de claude.ai (lo recibe chat.js).
+    func attach(data: Data, name: String, mime: String) async -> String {
+        let js = "return window.pockitAttach ? window.pockitAttach(name, mime, b64) : 'no-chat-js'"
+        let result = try? await webView.callAsyncJavaScript(js, arguments: ["name": name, "mime": mime, "b64": data.base64EncodedString()], contentWorld: .page)
+        return result as? String ?? "error"
     }
 
     func loadHome() {
@@ -81,6 +98,7 @@ final class WebModel: NSObject, ObservableObject {
         let path = wv.url?.path ?? ""
         if path != currentPath { currentPath = path }
         if path.hasPrefix("/chat/") {
+            UserDefaults.standard.set(path, forKey: Self.lastChatKey)
             let id = String(path.dropFirst("/chat/".count)).components(separatedBy: "/").first ?? ""
             onChatVisited?(id, wv.title)
         }

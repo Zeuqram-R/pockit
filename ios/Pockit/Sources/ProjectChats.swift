@@ -22,7 +22,7 @@ final class ProjectChats: ObservableObject {
     init() {
         if let raw = UserDefaults.standard.data(forKey: Self.cacheKey),
            let list = try? JSONDecoder().decode([ProjectChat].self, from: raw) {
-            chats = list
+            chats = list.map { var c = $0; c.title = Self.clean(c.title); return c }
         }
     }
 
@@ -31,10 +31,16 @@ final class ProjectChats: ObservableObject {
     }
 
     /// Lo que mandó chat.js desde la página del proyecto (en el orden de claude.ai: más reciente primero).
+    /// Quita íconos de letra (caracteres privados) que claude.ai mete en los títulos.
+    static func clean(_ t: String) -> String {
+        let scalars = t.unicodeScalars.filter { !(0xE000...0xF8FF).contains($0.value) && $0.value != 0xFFFD && !(0x200B...0x200F).contains($0.value) }
+        return String(String.UnicodeScalarView(scalars)).trimmingCharacters(in: .whitespaces)
+    }
+
     func ingestFromProjectPage(_ items: [[String: Any]]) {
         var merged: [ProjectChat] = []
         for item in items {
-            let title = (item["title"] as? String ?? "").trimmingCharacters(in: .whitespaces)
+            let title = Self.clean(item["title"] as? String ?? "")
             guard !title.isEmpty else { continue }
             var id = item["id"] as? String ?? ""
             if id.isEmpty, let known = chats.first(where: { $0.title == title && !$0.chatID.isEmpty }) { id = known.chatID }
@@ -44,14 +50,22 @@ final class ProjectChats: ObservableObject {
         for old in chats where !merged.contains(where: { $0.title == old.title || (!old.chatID.isEmpty && $0.chatID == old.chatID) }) {
             merged.append(old)
         }
-        chats = merged
+        // Sin repetidos (mismo id o mismo título).
+        var seen = Set<String>()
+        chats = merged.filter { c in
+            let key = c.chatID.isEmpty ? "t:" + c.title : c.chatID
+            let tkey = "t:" + c.title
+            if seen.contains(key) || (c.chatID.isEmpty && seen.contains(tkey)) { return false }
+            seen.insert(key); seen.insert(tkey)
+            return true
+        }
         save()
     }
 
     /// Cada vez que se abre una conversación en Pockit (todas son del proyecto: no hay otra forma de llegar).
     func visited(chatID: String, title: String?) {
         guard chatID.count >= 20 else { return }
-        let clean = (title ?? "")
+        let clean = Self.clean(title ?? "")
             .replacingOccurrences(of: " - Claude", with: "")
             .replacingOccurrences(of: " | Claude", with: "")
             .trimmingCharacters(in: .whitespaces)

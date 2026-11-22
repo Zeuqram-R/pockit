@@ -89,7 +89,7 @@ struct CollectibleCategory: Codable, Identifiable, Hashable {
 
 /// Orden fijo de las categorías generales (como en el menú Progress > Collections del juego).
 enum CollectibleGroups {
-    static let order = ["Kenton's Treasures", "Collectible Cards", "Waink Locations", "Exploration"]
+    static let order = ["Kenton's Treasures", "Collectible Cards", "Waink Locations", "Exploration", "Animals"]
 }
 
 /// Una cuenta dentro de BUCKME (p. ej. "Checking Account", "Family Savings").
@@ -118,6 +118,7 @@ struct PockitData: Codable {
     var missions: [MissionEntry] = []
     var importedEventLog = false
     var seededV2 = false
+    var seededV3 = false
     var updatedAt = Date()
 
     init() {}
@@ -136,6 +137,7 @@ struct PockitData: Codable {
         missions = try c.decodeIfPresent([MissionEntry].self, forKey: .missions) ?? []
         importedEventLog = try c.decodeIfPresent(Bool.self, forKey: .importedEventLog) ?? false
         seededV2 = try c.decodeIfPresent(Bool.self, forKey: .seededV2) ?? false
+        seededV3 = try c.decodeIfPresent(Bool.self, forKey: .seededV3) ?? false
         updatedAt = try c.decodeIfPresent(Date.self, forKey: .updatedAt) ?? Date()
     }
 }
@@ -177,6 +179,34 @@ final class PockitStore: ObservableObject {
         }
         if !data.importedEventLog { importEventLog() }
         if !data.seededV2 { seedV2() }
+        if !data.seededV3 { seedV3() }
+    }
+
+    /// 21 nov (noche): Kenton's Treasures se divide en sus tres "Nuestra Señora" (con doubloons)
+    /// y se agrega Animals con sus 8 subcategorías.
+    private func seedV3() {
+        mutate { d in
+            d.collectibles.removeAll { $0.group == "Kenton's Treasures" }
+            d.collectibles.insert(contentsOf: [
+                CollectibleCategory(group: "Kenton's Treasures", name: "Nuestra Señora del Ocio", total: 10, extraCount: 10),
+                CollectibleCategory(group: "Kenton's Treasures", name: "Nuestra Señora de la Ética Laxa"),
+                CollectibleCategory(group: "Kenton's Treasures", name: "Nuestra Señora de la Noche"),
+            ], at: 0)
+            let animals: [CollectibleCategory] = [
+                CollectibleCategory(group: "Animals", name: "Hunting", total: 61, items: [CollectibleItem(name: "Whitetail Deer")]),
+                CollectibleCategory(group: "Animals", name: "Fishing", total: 35, items: [CollectibleItem(name: "Stoplight Parrotfish"), CollectibleItem(name: "Permit")]),
+                CollectibleCategory(group: "Animals", name: "Mammals", total: 18),
+                CollectibleCategory(group: "Animals", name: "Cats and Dogs", total: 34, items: [CollectibleItem(name: "Balinese"), CollectibleItem(name: "German Shepherd")]),
+                CollectibleCategory(group: "Animals", name: "Reptiles and Amphibians", total: 6),
+                CollectibleCategory(group: "Animals", name: "Birds", total: 60, items: [CollectibleItem(name: "Eastern Brown Pelican"), CollectibleItem(name: "Leghorn Chicken")]),
+                CollectibleCategory(group: "Animals", name: "Aquatic", total: 18, items: [CollectibleItem(name: "Atlantic Goliath Grouper")]),
+                CollectibleCategory(group: "Animals", name: "Other", total: 23),
+            ]
+            for a in animals where !d.collectibles.contains(where: { $0.group == "Animals" && $0.name == a.name }) {
+                d.collectibles.append(a)
+            }
+            d.seededV3 = true
+        }
     }
 
     /// Lo que Jose ya tenía en el juego el 21 de nov (lo contó él): categorías de collectibles y cuentas de BUCKME.

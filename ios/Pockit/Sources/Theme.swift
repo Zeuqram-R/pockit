@@ -58,8 +58,8 @@ enum Theme {
         // pa' que el contenido no quede encima de "Ajustes" y "Listo".
         let nav = UINavigationBarAppearance()
         nav.configureWithDefaultBackground()
-        nav.backgroundEffect = UIBlurEffect(style: .systemUltraThinMaterialDark)
-        nav.backgroundColor = UIColor(nightDeep).withAlphaComponent(0.9)
+        nav.backgroundEffect = UIBlurEffect(style: .systemThinMaterialDark)
+        nav.backgroundColor = UIColor(nightDeep).withAlphaComponent(0.45)
         nav.shadowColor = UIColor.white.withAlphaComponent(0.12)
         if let f = UIFont(name: DisplayWeight.bold.rawValue, size: 22) {
             nav.titleTextAttributes = [.font: f, .foregroundColor: UIColor.white]
