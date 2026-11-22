@@ -10,7 +10,7 @@ enum PockitTab: String, CaseIterable, Identifiable {
         case .marisol: return "Marisol"
         case .pendientes: return t.s("Pendientes", "To-do")
         case .money: return "Money"
-        case .collectibles: return "Collectibles"
+        case .collectibles: return "Progress"
         case .mapa: return t.s("Mapa", "Map")
         }
     }

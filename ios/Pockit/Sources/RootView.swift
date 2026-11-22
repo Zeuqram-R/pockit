@@ -31,6 +31,10 @@ struct RootView: View {
                             .overlay {
                                 if web.isNewChat { NewChatView() }
                             }
+                            // En una conversación: caja de escribir nativa estilo iMessage.
+                            .overlay(alignment: .bottom) {
+                                if web.isChatPage && skin.chatActive { ChatComposerBar() }
+                            }
                             // Deslizar desde el borde izquierdo abre el panel de conversaciones.
                             .overlay(alignment: .leading) {
                                 Color.clear
@@ -114,6 +118,11 @@ struct RootView: View {
         }
         .onAppear {
             state.onEvent = { tag in store.ingest(tag) }
+            // Si nunca se guardó la última conversación, abrir la más reciente del panel.
+            if UserDefaults.standard.string(forKey: WebModel.lastChatKey) == nil,
+               let recent = chats.chats.first(where: { !$0.chatID.isEmpty }) {
+                web.open(path: recent.path)
+            }
             web.onTags = { items in state.handle(items: items) }
             web.onProjectChats = { items in chats.ingestFromProjectPage(items) }
             web.onChatVisited = { id, title in chats.visited(chatID: id, title: title) }
@@ -150,7 +159,7 @@ struct TopBar: View {
         // Como el encabezado de iMessage: botón a la izquierda, contacto al centro, botones a la derecha.
         ZStack(alignment: .top) {
             HStack(spacing: 10) {
-                GlassCircleButton(systemName: "sidebar.left", label: t.s("Conversaciones", "Chats"), action: onChats)
+                GlassCircleButton(systemName: "line.3.horizontal", label: t.s("Conversaciones", "Chats"), action: onChats)
                 Spacer()
                 GlassCircleButton(systemName: state.spoilersOn ? "eye.fill" : "eye.slash.fill",
                                   label: state.spoilersOn ? t.spoilersOn : t.spoilersOff,

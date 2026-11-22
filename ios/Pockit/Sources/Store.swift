@@ -92,6 +92,49 @@ enum CollectibleGroups {
     static let order = ["Kenton's Treasures", "Collectible Cards", "Waink Locations", "Exploration", "Animals"]
 }
 
+// MARK: - Progress (Challenges y Activities) y Garage
+
+struct ChallengeCategory: Codable, Identifiable, Hashable {
+    var id = UUID()
+    var name: String
+    var total: Int
+    var done: [String] = []
+}
+
+struct ActivityStat: Codable, Hashable, Identifiable {
+    var id: String { label }
+    var label: String
+    var value: Int
+    var max: Int?
+}
+
+struct ActivityItem: Codable, Identifiable, Hashable {
+    var id = UUID()
+    var name: String
+    var discovered = true
+    var level: String?          // Beginner / Intermediate…
+    var stats: [ActivityStat] = []
+    var best: String?           // mejor tiempo o puntaje
+    var medal: String?          // Bronze / Silver / Gold
+    var check: Bool?            // "Full challenge complete", "EIRS challenge completed"…
+    var checkLabel: String?
+}
+
+struct ActivityCategory: Codable, Identifiable, Hashable {
+    var id = UUID()
+    var name: String
+    var items: [ActivityItem] = []
+    var discoveredCount: Int { items.filter(\.discovered).count }
+}
+
+struct Vehicle: Codable, Identifiable, Hashable {
+    var id = UUID()
+    var name: String
+    var kind: String            // car, moto, boat, bike, air, other
+    var location = ""
+    var notes = ""
+}
+
 /// Una cuenta dentro de BUCKME (p. ej. "Checking Account", "Family Savings").
 struct BuckmeAccount: Codable, Identifiable, Hashable {
     var id = UUID()
@@ -119,6 +162,10 @@ struct PockitData: Codable {
     var importedEventLog = false
     var seededV2 = false
     var seededV3 = false
+    var challenges: [ChallengeCategory] = []
+    var activities: [ActivityCategory] = []
+    var vehicles: [Vehicle] = []
+    var seededV4 = false
     var updatedAt = Date()
 
     init() {}
@@ -138,6 +185,10 @@ struct PockitData: Codable {
         importedEventLog = try c.decodeIfPresent(Bool.self, forKey: .importedEventLog) ?? false
         seededV2 = try c.decodeIfPresent(Bool.self, forKey: .seededV2) ?? false
         seededV3 = try c.decodeIfPresent(Bool.self, forKey: .seededV3) ?? false
+        challenges = try c.decodeIfPresent([ChallengeCategory].self, forKey: .challenges) ?? []
+        activities = try c.decodeIfPresent([ActivityCategory].self, forKey: .activities) ?? []
+        vehicles = try c.decodeIfPresent([Vehicle].self, forKey: .vehicles) ?? []
+        seededV4 = try c.decodeIfPresent(Bool.self, forKey: .seededV4) ?? false
         updatedAt = try c.decodeIfPresent(Date.self, forKey: .updatedAt) ?? Date()
     }
 }
@@ -180,7 +231,137 @@ final class PockitStore: ObservableObject {
         if !data.importedEventLog { importEventLog() }
         if !data.seededV2 { seedV2() }
         if !data.seededV3 { seedV3() }
+        if !data.seededV4 { seedV4() }
     }
+
+    /// 21 nov: Challenges, Activities (solo lo que mide avance) y Garage, como los contó Jose.
+    private func seedV4() {
+        func ch(_ n: String, _ done: [String] = []) -> ChallengeCategory { ChallengeCategory(name: n, total: 10, done: done) }
+        func st(_ l: String, _ v: Int = 0, _ m: Int? = nil) -> ActivityStat { ActivityStat(label: l, value: v, max: m) }
+        func hidden() -> ActivityItem { ActivityItem(name: "???", discovered: false) }
+        func golf(_ n: String) -> ActivityItem { ActivityItem(name: n, stats: [st("Holes in one")], best: "9: 0 · 18: 0") }
+        func trial(_ n: String) -> ActivityItem { ActivityItem(name: n, best: "00:00.00") }
+        func range(_ n: String, _ lvl: String, time: Bool) -> ActivityItem { ActivityItem(name: n, level: lvl, stats: [st("Bullseyes")], best: time ? "00:00.00" : "0") }
+        let challenges = [ch("Combat", ["Speed Kills"]), ch("Criminal"), ch("Exploration"), ch("Fitness"), ch("Shopping"),
+                          ch("Sports"), ch("Survival", ["Alligator Kills"]), ch("Vehicle", ["Vehicle Discovery"])]
+        let activities: [ActivityCategory] = [
+            ActivityCategory(name: "Sports", items: [
+                ActivityItem(name: "Fishing", stats: [st("Species caught", 1, 35)], best: "Stoplight Parrotfish · 1 kg"),
+                hidden(),
+                golf("King Gator Adventure Golf"),
+                golf("Frontier Adventure Golf"),
+                ActivityItem(name: "Dino Golf Challenge", stats: [st("Holes in one")], best: "0", check: false, checkLabel: "Full challenge complete"),
+                ActivityItem(name: "Leaf Links Golf Challenge", stats: [st("Holes in one")], best: "0", check: false, checkLabel: "Full challenge complete"),
+                ActivityItem(name: "Mount Hailes Golf Challenge", stats: [st("Holes in one")], best: "0", check: false, checkLabel: "Full challenge complete"),
+                ActivityItem(name: "Basketball", stats: [st("Hoops scored", 1, 100)], best: "Streak 6", check: false, checkLabel: "EIRS challenge completed"),
+                ActivityItem(name: "Pool", stats: [st("Tables played", 0, 17), st("Opponents defeated", 0, 7)]),
+            ]),
+            ActivityCategory(name: "Racing", items: [
+                hidden(), hidden(), hidden(),
+                ActivityItem(name: "Boone Speedway", stats: [st("Unique races entered", 0, 2), st("Unique races won", 0, 2)]),
+                hidden(), hidden(),
+            ]),
+            ActivityCategory(name: "Race Challenges", items: [
+                hidden(), hidden(),
+                trial("Boone Speedway Trial"), trial("Gellhorn Raceway Trial"),
+                hidden(), hidden(),
+                ActivityItem(name: "Mud Club Air Time Stunt Run", best: "0"),
+                trial("Mud Club Drag Trial"), trial("Mud Club Hill Climb Trial"),
+                hidden(),
+                trial("Mud Club Oval Trial"), trial("Mud Club Swamp Run Trial"),
+                hidden(),
+            ]),
+            ActivityCategory(name: "Shooting Ranges", items: [
+                ActivityItem(name: "Rodgers Ranch & Shooting Range", stats: [st("Ranges unlocked", 0, 6), st("Medals", 0, 12)]),
+                range("Rodgers Ranch Saloon Range", "Beginner", time: false),
+                range("Rodgers Ranch ??? Range", "Beginner", time: false),
+                range("Rodgers Ranch Zombie Range", "Beginner", time: false),
+                range("Rodgers Ranch Cops & Robbers Range", "Beginner", time: false),
+                range("Rodgers Ranch Market Range", "Beginner", time: false),
+                range("Rodgers Ranch Alien Range", "Beginner", time: false),
+                ActivityItem(name: "Griffin Shooting Range", stats: [st("Ranges unlocked", 0, 6), st("Medals", 0, 54)]),
+                range("Griffin 3-Point Range", "Beginner", time: true),
+                range("Griffin Hook Range", "Beginner", time: true),
+                range("Griffin Loop Range", "Beginner", time: true),
+                range("Griffin Maze Range", "Intermediate", time: true),
+                range("Griffin Compound Range", "Intermediate", time: true),
+                range("Griffin Village Range", "Intermediate", time: true),
+            ]),
+            ActivityCategory(name: "Games", items: [hidden(), ActivityItem(name: "Street Trash 3: Dezombifier"), hidden(), ActivityItem(name: "Tenebrae Lux")]),
+            ActivityCategory(name: "Stunts", items: [
+                ActivityItem(name: "Stunt Jumps", stats: [st("Discovered", 5, 130), st("Completed", 5, 130), st("Challenges completed", 2, 130)]),
+                ActivityItem(name: "Under the Bridges", stats: [st("Discovered", 0, 202), st("Completed", 0, 202)]),
+                ActivityItem(name: "Knife Flights", stats: [st("Discovered", 0, 40), st("Completed", 0, 40)]),
+                ActivityItem(name: "Base Jumps", stats: [st("Discovered", 0, 25), st("Completed", 0, 25), st("Par times beaten", 0, 25)]),
+            ]),
+            ActivityCategory(name: "Top Fun Drones", items: Array(repeating: 0, count: 14).map { _ in hidden() }),
+        ]
+        let home = "Casa del inicio (Jason)"
+        let vehicles = [
+            Vehicle(name: "'70 Vapid Ganado", kind: "car", location: home, notes: "Ultimate Edition: Retro Build gratis en Coastal Auto Care (Key Lento), en Full Kits / Pro Builds. Solo se usa en el Chapter 1."),
+            Vehicle(name: "Dinka Enduro", kind: "moto", location: home, notes: "Ultimate Edition (army fatigue). Solo se usa en el Chapter 1."),
+            Vehicle(name: "Bombora S23", kind: "other", location: home),
+            Vehicle(name: "Bicicleta", kind: "bike", location: home, notes: "Viene con la casa del inicio."),
+        ]
+        mutate { d in
+            if d.challenges.isEmpty { d.challenges = challenges }
+            if d.activities.isEmpty { d.activities = activities }
+            if d.vehicles.isEmpty { d.vehicles = vehicles }
+            d.seededV4 = true
+        }
+    }
+
+    // MARK: Challenges / Activities / Garage
+
+    func markChallenge(category: String, item: String, done: Bool = true) {
+        let name = item.trimmingCharacters(in: .whitespaces)
+        guard !name.isEmpty else { return }
+        mutate { d in
+            guard let i = d.challenges.firstIndex(where: { $0.name.caseInsensitiveCompare(category) == .orderedSame }) else { return }
+            d.challenges[i].done.removeAll { $0.caseInsensitiveCompare(name) == .orderedSame }
+            if done { d.challenges[i].done.append(name) }
+        }
+    }
+
+    func updateActivity(_ item: ActivityItem, in cat: ActivityCategory) {
+        mutate { d in
+            guard let c = d.activities.firstIndex(where: { $0.id == cat.id }),
+                  let i = d.activities[c].items.firstIndex(where: { $0.id == item.id }) else { return }
+            d.activities[c].items[i] = item
+        }
+    }
+
+    /// Etiqueta de Marisol: ⟦pockit activity cat="Stunts" item="Stunt Jumps" stat="Completed" value=6⟧
+    func ingestActivity(_ tag: [String: String]) {
+        guard let cat = tag["cat"], let name = tag["item"] else { return }
+        mutate { d in
+            guard let c = d.activities.firstIndex(where: { $0.name.caseInsensitiveCompare(cat) == .orderedSame }) else { return }
+            var i = d.activities[c].items.firstIndex(where: { $0.name.caseInsensitiveCompare(name) == .orderedSame })
+            if i == nil, let slot = d.activities[c].items.firstIndex(where: { !$0.discovered }) {
+                d.activities[c].items[slot] = ActivityItem(name: name)
+                i = slot
+            }
+            guard let idx = i else { return }
+            var it = d.activities[c].items[idx]
+            it.discovered = true
+            if let label = tag["stat"], let v = tag["value"].flatMap(Self.number) {
+                if let s = it.stats.firstIndex(where: { $0.label.caseInsensitiveCompare(label) == .orderedSame }) { it.stats[s].value = v }
+                else { it.stats.append(ActivityStat(label: label, value: v, max: tag["max"].flatMap(Self.number))) }
+            }
+            if let m = tag["medal"] { it.medal = m }
+            if let b = tag["best"] { it.best = b }
+            if let ck = tag["done"] { it.check = ["yes", "true", "1", "si", "sí"].contains(ck.lowercased()) }
+            d.activities[c].items[idx] = it
+        }
+    }
+
+    func saveVehicle(_ v: Vehicle) {
+        mutate { d in
+            if let i = d.vehicles.firstIndex(where: { $0.id == v.id }) { d.vehicles[i] = v } else { d.vehicles.append(v) }
+        }
+    }
+
+    func delete(_ v: Vehicle) { mutate { $0.vehicles.removeAll { $0.id == v.id } } }
 
     /// 21 nov (noche): Kenton's Treasures se divide en sus tres "Nuestra Señora" (con doubloons)
     /// y se agrega Animals con sus 8 subcategorías.
@@ -262,7 +443,7 @@ final class PockitStore: ObservableObject {
     // MARK: Etiquetas de Marisol
 
     func ingest(_ tag: [String: String], at date: Date = Date()) {
-        if let cat = tag["cat"] {
+        if let cat = tag["cat"], type.isEmpty || type == "collectible" {
             let before = collectiblesFound
             if let item = tag["item"] {
                 addCollectible(category: cat, item: item, total: tag["total"].flatMap(Self.number),
@@ -271,6 +452,23 @@ final class PockitStore: ObservableObject {
             } else if let n = tag["count"].flatMap(Self.number) {
                 setCollectibleCount(category: cat, count: n, total: tag["total"].flatMap(Self.number), group: tag["group"])
                 if collectiblesFound > before { announce("🃏", lang: "\(cat): \(n)") }
+            }
+        }
+        let type = tag["_type"] ?? ""
+        if type == "challenge", let c = tag["cat"], let item = tag["item"] {
+            markChallenge(category: c, item: item)
+            announce("🏆", lang: "\(c): \(item)")
+            return
+        }
+        if type == "activity" {
+            ingestActivity(tag)
+            if let item = tag["item"] { announce("🎯", lang: item) }
+            return
+        }
+        if type == "vehicle", let v = tag["name"], !v.isEmpty {
+            if !data.vehicles.contains(where: { $0.name.caseInsensitiveCompare(v) == .orderedSame }) {
+                saveVehicle(Vehicle(name: v, kind: tag["kind"] ?? "car", location: tag["where"] ?? ""))
+                announce("🚗", lang: v)
             }
         }
         if let name = tag["buckme"] ?? (tag["account"]), let amount = tag["amount"].flatMap(Self.number) {

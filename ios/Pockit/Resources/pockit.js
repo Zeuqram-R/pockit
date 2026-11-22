@@ -120,13 +120,16 @@
       post({ type: "sendResult", ok: false, reason: "insert: " + e });
       return false;
     }
-    for (let i = 0; i < 30; i++) {
+    // Hasta 12 s (si hay un adjunto subiendo, el botón tarda en activarse).
+    for (let i = 0; i < 120; i++) {
       await new Promise((r) => setTimeout(r, 100));
       const b = sendButton();
       if (b) {
         addingPrefix = true; // ya trae el prefijo
         b.click();
         addingPrefix = false;
+        // La caja de claude.ai está escondida: soltar el foco pa' que no quede el teclado abierto.
+        try { c.blur(); if (document.activeElement) document.activeElement.blur(); } catch (e) {}
         post({ type: "sendResult", ok: true });
         return true;
       }
@@ -153,6 +156,9 @@
 
   function parseAttrs(body) {
     const out = {};
+    // Palabra de tipo al inicio (collectible, challenge, activity, vehicle, buckme…).
+    const t = body.trim().match(/^([a-z]+)(?=\s|$)/i);
+    if (t) out._type = t[1].toLowerCase();
     const re = /(\w+)=("([^"]*)"|\S+)/g;
     let m;
     while ((m = re.exec(body))) out[m[1]] = m[3] !== undefined ? m[3] : m[2];

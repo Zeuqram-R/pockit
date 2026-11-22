@@ -16,6 +16,9 @@ final class WebModel: NSObject, ObservableObject {
     @Published var sendProblem: String?
     /// Ruta abierta en claude.ai (pa' marcar la conversación actual en el panel).
     @Published var currentPath = ""
+    /// Marisol está escribiendo (lo avisa chat.js).
+    @Published var isStreaming = false
+    var isChatPage: Bool { currentPath.hasPrefix("/chat/") }
 
     /// Lo llama el puente JS con las etiquetas de Marisol.
     var onTags: (@MainActor ([[String: Any]]) -> Void)?
@@ -192,6 +195,10 @@ final class WebModel: NSObject, ObservableObject {
         webView.evaluateJavaScript("window.pockitSend && window.pockitSend(\(Self.jsString(text)))")
     }
 
+    func stopReply() {
+        webView.evaluateJavaScript("window.pockitStop && window.pockitStop()")
+    }
+
     func run(_ js: String) {
         webView.evaluateJavaScript(js)
     }
@@ -217,6 +224,8 @@ final class WebModel: NSObject, ObservableObject {
         switch type {
         case "tags":
             if let items = dict["items"] as? [[String: Any]] { onTags?(items) }
+        case "streaming":
+            isStreaming = (dict["on"] as? Bool) ?? false
         case "projectChats":
             if let items = dict["items"] as? [[String: Any]] { onProjectChats?(items) }
         case "sendResult":

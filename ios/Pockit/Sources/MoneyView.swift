@@ -1,6 +1,8 @@
 import SwiftUI
 import Charts
 
+enum MoneySection: String { case dinero, propiedades, garage }
+
 /// Money: banco / app / casa, gráfica del total, historial y (cuando se desbloquea) propiedades y negocios.
 struct MoneyView: View {
     @EnvironmentObject private var settings: AppSettings
@@ -10,6 +12,7 @@ struct MoneyView: View {
     @State private var confirmUnlock = false
     @State private var addingProp = false
     @State private var showBuckme = false
+    @AppStorage("pockit.moneySection") private var section: MoneySection = .dinero
 
     var body: some View {
         let t = settings.t
@@ -17,6 +20,18 @@ struct MoneyView: View {
         let previous = store.data.money.dropLast().last
         NavigationStack {
             List {
+                Section {
+                    Picker("", selection: $section) {
+                        Text(t.s("Dinero", "Money")).tag(MoneySection.dinero)
+                        Text(t.s("Propiedades", "Properties")).tag(MoneySection.propiedades)
+                        Text("Garage").tag(MoneySection.garage)
+                    }
+                    .pickerStyle(.segmented)
+                    .listRowBackground(Color.clear)
+                    .listRowInsets(EdgeInsets(top: 4, leading: 0, bottom: 4, trailing: 0))
+                }
+                switch section {
+                case .dinero:
                 Section {
                     VStack(alignment: .leading, spacing: 4) {
                         Text("TOTAL").font(Theme.display(15, weight: .semibold)).foregroundStyle(Theme.lilac)
@@ -84,7 +99,31 @@ struct MoneyView: View {
                     }
                 }
 
-                if store.data.propiedadesUnlocked {
+                if !store.data.money.isEmpty {
+                    Section {
+                        ForEach(Array(store.data.money.reversed().prefix(30))) { s in
+                            HStack {
+                                VStack(alignment: .leading, spacing: 2) {
+                                    Text(Fmt.money(s.total)).font(Theme.text(16, .semibold)).foregroundStyle(.white)
+                                    Text("\(t.s("Banco", "Bank")) \(Fmt.money(s.bank)) · BUCKME \(Fmt.money(s.app)) · STASH \(Fmt.money(s.home))")
+                                        .font(Theme.text(11, relativeTo: .caption2)).foregroundStyle(Theme.lilac)
+                                }
+                                Spacer()
+                                VStack(alignment: .trailing, spacing: 2) {
+                                    Text(Fmt.relative(s.at, lang: settings.language)).font(Theme.text(11, relativeTo: .caption2)).foregroundStyle(Theme.lilac)
+                                    if s.source == "marisol" { Text("Marisol").font(Theme.text(10, .semibold)).foregroundStyle(Theme.switchPink) }
+                                }
+                            }
+                            .menuRow()
+                            .swipeActions { Button(role: .destructive) { store.delete(s) } label: { Label(t.s("Borrar", "Delete"), systemImage: "trash") } }
+                        }
+                    } header: {
+                        SectionTitle(text: t.s("Registros", "Entries"))
+                    }
+                }
+                case .propiedades:
+                    if store.data.propiedadesUnlocked {
+
                     Section {
                         if store.data.propiedades.isEmpty {
                             EmptyRow(symbol: "building.2", text: t.s("Agregá tus propiedades y negocios con +.", "Add your properties and businesses with +."))
@@ -109,29 +148,14 @@ struct MoneyView: View {
                     } header: {
                         SectionTitle(text: t.s("Propiedades y negocios", "Properties & businesses"))
                     }
-                }
-
-                if !store.data.money.isEmpty {
-                    Section {
-                        ForEach(Array(store.data.money.reversed().prefix(30))) { s in
-                            HStack {
-                                VStack(alignment: .leading, spacing: 2) {
-                                    Text(Fmt.money(s.total)).font(Theme.text(16, .semibold)).foregroundStyle(.white)
-                                    Text("\(t.s("Banco", "Bank")) \(Fmt.money(s.bank)) · BUCKME \(Fmt.money(s.app)) · STASH \(Fmt.money(s.home))")
-                                        .font(Theme.text(11, relativeTo: .caption2)).foregroundStyle(Theme.lilac)
-                                }
-                                Spacer()
-                                VStack(alignment: .trailing, spacing: 2) {
-                                    Text(Fmt.relative(s.at, lang: settings.language)).font(Theme.text(11, relativeTo: .caption2)).foregroundStyle(Theme.lilac)
-                                    if s.source == "marisol" { Text("Marisol").font(Theme.text(10, .semibold)).foregroundStyle(Theme.switchPink) }
-                                }
-                            }
-                            .menuRow()
-                            .swipeActions { Button(role: .destructive) { store.delete(s) } label: { Label(t.s("Borrar", "Delete"), systemImage: "trash") } }
+                                    } else {
+                        Section {
+                            EmptyRow(symbol: "lock.fill", text: t.s("Todavía no has desbloqueado propiedades y negocios en el juego.", "You haven't unlocked properties & businesses in the game yet."))
+                            Button(t.s("Ya los desbloqueé", "I've unlocked them")) { confirmUnlock = true }.menuRow()
                         }
-                    } header: {
-                        SectionTitle(text: t.s("Registros", "Entries"))
                     }
+                case .garage:
+                    GarageSections()
                 }
             }
             .scrollContentBackground(.hidden)
@@ -139,7 +163,9 @@ struct MoneyView: View {
             .navigationTitle("MONEY")
             .toolbar {
                 ToolbarItem(placement: .primaryAction) {
-                    Button(t.s("Actualizar", "Update")) { editing = true }.fontWeight(.semibold)
+                    if section == .dinero {
+                        Button(t.s("Actualizar", "Update")) { editing = true }.fontWeight(.semibold)
+                    }
                 }
                 ToolbarItem(placement: .topBarLeading) {
                     Menu {
@@ -384,5 +410,108 @@ struct BuckmeSheet: View {
         }
         .presentationBackground(Theme.nightDeep)
         .onAppear { accounts = store.data.buckme }
+    }
+}
+
+
+// MARK: - Garage
+
+enum VehicleKind: String, CaseIterable, Identifiable {
+    case car, moto, boat, bike, air, other
+    var id: String { rawValue }
+    var symbol: String {
+        switch self {
+        case .car: return "car.fill"
+        case .moto: return "motorcycle"
+        case .boat: return "sailboat.fill"
+        case .bike: return "bicycle"
+        case .air: return "airplane"
+        case .other: return "questionmark.circle"
+        }
+    }
+    func title(_ t: L10n) -> String {
+        switch self {
+        case .car: return t.s("Carros", "Cars")
+        case .moto: return t.s("Motos", "Motorcycles")
+        case .boat: return t.s("Lanchas", "Boats")
+        case .bike: return t.s("Bicicletas", "Bicycles")
+        case .air: return t.s("Aéreos", "Aircraft")
+        case .other: return t.s("Por clasificar", "Unsorted")
+        }
+    }
+}
+
+struct GarageSections: View {
+    @EnvironmentObject private var settings: AppSettings
+    @EnvironmentObject private var store: PockitStore
+    @State private var editing: Vehicle?
+
+    var body: some View {
+        let t = settings.t
+        ForEach(VehicleKind.allCases) { kind in
+            let list = store.data.vehicles.filter { (VehicleKind(rawValue: $0.kind) ?? .other) == kind }
+            if !list.isEmpty {
+                Section {
+                    ForEach(list) { v in
+                        Button { editing = v } label: {
+                            HStack(spacing: 12) {
+                                Image(systemName: kind.symbol).font(.system(size: 18)).foregroundStyle(Theme.switchPink).frame(width: 28)
+                                VStack(alignment: .leading, spacing: 2) {
+                                    Text(v.name).font(Theme.text(16, .semibold)).foregroundStyle(.white)
+                                    if !v.location.isEmpty { Text(v.location).font(Theme.text(12)).foregroundStyle(Theme.lilac) }
+                                    if !v.notes.isEmpty { Text(v.notes).font(Theme.text(11)).foregroundStyle(Theme.lilac.opacity(0.8)).lineLimit(2) }
+                                }
+                            }
+                        }
+                        .buttonStyle(.plain)
+                        .menuRow()
+                        .swipeActions { Button(role: .destructive) { store.delete(v) } label: { Label(t.s("Borrar", "Delete"), systemImage: "trash") } }
+                    }
+                } header: {
+                    HStack { SectionTitle(text: kind.title(t)); Spacer(); Text("\(list.count)").font(Theme.display(17, weight: .semibold)).foregroundStyle(Theme.switchPink) }
+                }
+            }
+        }
+        Section {
+            Button { editing = Vehicle(name: "", kind: "car") } label: { Label(t.s("Agregar vehículo", "Add vehicle"), systemImage: "plus") }
+                .menuRow()
+        }
+        .sheet(item: $editing) { v in VehicleSheet(vehicle: v).presentationDetents([.medium, .large]) }
+    }
+}
+
+struct VehicleSheet: View {
+    @EnvironmentObject private var settings: AppSettings
+    @EnvironmentObject private var store: PockitStore
+    @Environment(\.dismiss) private var dismiss
+    @State var vehicle: Vehicle
+
+    var body: some View {
+        let t = settings.t
+        NavigationStack {
+            Form {
+                Section {
+                    TextField(t.s("Nombre", "Name"), text: $vehicle.name).menuRow()
+                    Picker(t.s("Tipo", "Type"), selection: $vehicle.kind) {
+                        ForEach(VehicleKind.allCases) { k in Label(k.title(t), systemImage: k.symbol).tag(k.rawValue) }
+                    }
+                    .menuRow()
+                    TextField(t.s("Dónde está guardado", "Where it's stored"), text: $vehicle.location).menuRow()
+                    TextField(t.s("Mejoras / notas", "Upgrades / notes"), text: $vehicle.notes, axis: .vertical).lineLimit(2...6).menuRow()
+                }
+            }
+            .scrollContentBackground(.hidden)
+            .background(Theme.menu.ignoresSafeArea())
+            .navigationTitle(vehicle.name.isEmpty ? t.s("Nuevo", "New") : vehicle.name)
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .cancellationAction) { Button(t.cancel) { dismiss() } }
+                ToolbarItem(placement: .confirmationAction) {
+                    Button(t.s("Guardar", "Save")) { store.saveVehicle(vehicle); dismiss() }
+                        .disabled(vehicle.name.trimmingCharacters(in: .whitespaces).isEmpty)
+                }
+            }
+        }
+        .presentationBackground(Theme.nightDeep)
     }
 }
