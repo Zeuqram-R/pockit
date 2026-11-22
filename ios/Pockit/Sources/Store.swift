@@ -200,6 +200,8 @@ struct PockitData: Codable {
     var pins: [MapPin] = []
     /// Lugares del mapa de GTABase que ya desbloqueó en su partida (por nombre).
     var places: [String] = []
+    /// Categorías del mapa que se muestran completas (ej. gasolineras).
+    var placeCats: [String] = []
     var updatedAt = Date()
 
     init() {}
@@ -226,6 +228,7 @@ struct PockitData: Codable {
         seededV5 = try c.decodeIfPresent(Bool.self, forKey: .seededV5) ?? false
         pins = (try? c.decodeIfPresent([MapPin].self, forKey: .pins)) ?? []
         places = try c.decodeIfPresent([String].self, forKey: .places) ?? []
+        placeCats = try c.decodeIfPresent([String].self, forKey: .placeCats) ?? []
         updatedAt = try c.decodeIfPresent(Date.self, forKey: .updatedAt) ?? Date()
     }
 }
@@ -761,6 +764,12 @@ final class PockitStore: ObservableObject {
         guard !n.isEmpty, !data.places.contains(where: { $0.caseInsensitiveCompare(n) == .orderedSame }) else { return false }
         mutate { $0.places.append(n) }
         return true
+    }
+    func addPlaces(_ names: [String]) {
+        mutate { d in for n in names where !d.places.contains(where: { $0.caseInsensitiveCompare(n) == .orderedSame }) { d.places.append(n) } }
+    }
+    func togglePlaceCat(_ id: String) {
+        mutate { d in if let i = d.placeCats.firstIndex(of: id) { d.placeCats.remove(at: i) } else { d.placeCats.append(id) } }
     }
     func removePlace(_ name: String) { mutate { $0.places.removeAll { $0.caseInsensitiveCompare(name) == .orderedSame } } }
 

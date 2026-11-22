@@ -113,8 +113,10 @@
     if (!map) return;
     if (!placeLayer) placeLayer = L.layerGroup().addTo(map);
     placeLayer.clearLayers();
-    places.forEach(function (name) {
-      var e = findEntry(name); if (!e) return;
+    var chosen = [], seen = {};
+    places.forEach(function (name) { var e = findEntry(name); if (e && !seen[e.data.id]) { seen[e.data.id] = 1; chosen.push(e); } });
+    if (placeCats.length) allEntries().forEach(function (e) { if (placeCats.indexOf(e.data.category) >= 0 && !seen[e.data.id]) { seen[e.data.id] = 1; chosen.push(e); } });
+    chosen.forEach(function (e) {
       var c = catOf(e.data.category);
       var ll = window.GTAB.worldToLatLng(e.data.x, e.data.y);
       var icon = L.divIcon({ className: "", html: "<div class='pk-place' style='--c:" + (c.color || "#333") + "'>" + iconHtml(e.data.category) + "</div>", iconSize: [30, 30], iconAnchor: [0, 0] });
@@ -124,6 +126,15 @@
     });
   }
   window.pkSetPlaces = function (list) { places = list || []; drawPlaces(); };
+  // categorías completas (ej. todas las gasolineras) — pa' meter lugares en bloque
+  var placeCats = [];
+  window.pkSetPlaceCats = function (list) { placeCats = list || []; drawPlaces(); };
+  window.pkCategories = function () {
+    var count = {};
+    allEntries().forEach(function (e) { count[e.data.category] = (count[e.data.category] || 0) + 1; });
+    return Object.keys(count).map(function (id) { var c = catOf(id); return { id: id, name: c.name || id, group: c.group || "", count: count[id] }; })
+      .sort(function (a, b) { return (a.group + a.name).localeCompare(b.group + b.name); });
+  };
   // búsqueda por nombre (desde 3 letras, máximo 25 resultados: no es pa' curiosear el mapa entero)
   window.pkSearch = function (q) {
     var n = norm(q); if (n.length < 3) return [];

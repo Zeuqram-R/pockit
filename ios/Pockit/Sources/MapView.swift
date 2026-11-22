@@ -73,6 +73,7 @@ final class MapWeb: NSObject, ObservableObject, WKScriptMessageHandler, WKNaviga
     private var started = false
     private var pendingPins: String = "[]"
     private var pendingPlaces: String = "[]"
+    private var pendingCats: String = "[]"
 
     override init() {
         let cfg = WKWebViewConfiguration()
@@ -120,6 +121,23 @@ final class MapWeb: NSObject, ObservableObject, WKScriptMessageHandler, WKNaviga
         if ready { webView.evaluateJavaScript("window.pkSetPlaces && window.pkSetPlaces(\(json))") }
     }
 
+    func setPlaceCats(_ ids: [String]) {
+        let json = String(data: (try? JSONSerialization.data(withJSONObject: ids)) ?? Data("[]".utf8), encoding: .utf8) ?? "[]"
+        pendingCats = json
+        if ready { webView.evaluateJavaScript("window.pkSetPlaceCats && window.pkSetPlaceCats(\(json))") }
+    }
+
+    func categories() async -> [PlaceCategory] {
+        guard ready else { return [] }
+        let r = try? await webView.callAsyncJavaScript("return JSON.stringify(window.pkCategories ? window.pkCategories() : [])", arguments: [:], contentWorld: .page)
+        guard let str = r as? String, let d = str.data(using: .utf8),
+              let arr = try? JSONSerialization.jsonObject(with: d) as? [[String: Any]] else { return [] }
+        return arr.compactMap { o in
+            guard let id = o["id"] as? String else { return nil }
+            return PlaceCategory(id: id, name: o["name"] as? String ?? id, group: o["group"] as? String ?? "", count: o["count"] as? Int ?? 0)
+        }
+    }
+
     func search(_ q: String) async -> [GamePlace] {
         guard ready else { return [] }
         let r = try? await webView.callAsyncJavaScript("return JSON.stringify(window.pkSearch ? window.pkSearch(q) : [])", arguments: ["q": q], contentWorld: .page)
@@ -160,6 +178,7 @@ final class MapWeb: NSObject, ObservableObject, WKScriptMessageHandler, WKNaviga
             ready = true
             webView.evaluateJavaScript("window.pkSetPins && window.pkSetPins(\(pendingPins))")
             webView.evaluateJavaScript("window.pkSetPlaces && window.pkSetPlaces(\(pendingPlaces))")
+            webView.evaluateJavaScript("window.pkSetPlaceCats && window.pkSetPlaceCats(\(pendingCats))")
         case "error":
             failed = true
         case "longPress":
@@ -285,6 +304,7 @@ struct MapaView: View {
             }
             .onChange(of: store.data.pins) { _, _ in pushPins() }
             .onChange(of: store.data.places) { _, _ in map.setPlaces(store.data.places) }
+            .onChange(of: store.data.placeCats) { _, _ in map.setPlaceCats(store.data.placeCats) }
             .onChange(of: filter) { _, _ in pushPins() }
             .onChange(of: map.ready) { _, _ in pushPins() }
             .sheet(item: $editing) { pin in
@@ -316,6 +336,7 @@ struct MapaView: View {
 
     private func pushPins() {
         map.setPlaces(store.data.places)
+        map.setPlaceCats(store.data.placeCats)
         map.setPins(store.data.pins.filter { $0.space == "gtab" && (filter == nil || $0.kind == filter!.rawValue) })
     }
 
@@ -511,12 +532,29 @@ struct GamePlace: Identifiable, Hashable {
     var county: String? = nil
 }
 
+struct PlaceCategory: Identifiable, Hashable {
+    let id: String
+    let name: String
+    let group: String
+    let count: Int
+    /// Coleccionables y cosas escondidas: mostrarlas completas sería spoiler.
+    var isSecret: Bool {
+        let g = group.lowercased(), i = id.lowercased()
+        return g.contains("collect") || i.hasPrefix("card-") || ["hidden-package", "treasure", "meteorite", "message-bottle", "magazine", "playlist",
+                "waink-curiosity", "waink-landmark", "waink-sculpture", "meditation", "unique-weapon", "safe", "yellow-loot-box", "scoop-container",
+                "random-event", "standout-vehicle", "under-the-bridge", "knife-flight", "stunt-jump", "ahol-street-art", "mural", "luxury-watch",
+                "weapon-spawn", "vehicle-spawn"].contains(i)
+    }
+}
+
 struct PlaceSearchSheet: View {
     @EnvironmentObject private var settings: AppSettings
     @EnvironmentObject private var store: PockitStore
     let open: (String) -> Void
     @State private var query = ""
     @State private var results: [GamePlace] = []
+    @State private var cats: [PlaceCategory] = []
+    @State private var showSecretCats = false
 
     var body: some View {
         let t = settings.t
@@ -529,6 +567,28 @@ struct PlaceSearchSheet: View {
                             .font(Theme.text(14)).foregroundStyle(Theme.lilac)
                     }
                     .listRowBackground(Color.clear)
+                    Section {
+                        ForEach(cats.filter { showSecretCats || !$0.isSecret }) { c in
+                            let on = store.data.placeCats.contains(c.id)
+                            Button { store.togglePlaceCat(c.id); UISelectionFeedbackGenerator().selectionChanged() } label: {
+                                HStack {
+                                    Text(c.name).foregroundStyle(.white)
+                                    if c.isSecret { Text("⚠️").font(.system(size: 12)) }
+                                    Spacer()
+                                    Text("\(c.count)").font(Theme.text(13)).foregroundStyle(Theme.lilac)
+                                    Image(systemName: on ? "checkmark.circle.fill" : "circle").foregroundStyle(on ? Theme.teal : Theme.lilac.opacity(0.6))
+                                }
+                            }
+                        }
+                        Toggle(t.s("Mostrar también coleccionables y secretos (spoilers)", "Also show collectibles & secrets (spoilers)"), isOn: $showSecretCats)
+                            .font(Theme.text(14))
+                    } header: {
+                        Text(t.s("Categorías completas", "Whole categories"))
+                    } footer: {
+                        Text(t.s("Tiendas, gasolineras, bancos y negocios casi siempre se ven en el mapa desde el principio: activalos de un toque.",
+                                 "Shops, gas stations, banks and businesses usually show on the map from the start: turn them on in one tap."))
+                    }
+                    .listRowBackground(Theme.panel)
                     if !store.data.places.isEmpty {
                         Section(t.s("En tu mapa", "On your map")) {
                             ForEach(store.data.places, id: \.self) { n in
@@ -561,6 +621,11 @@ struct PlaceSearchSheet: View {
                     .listRowBackground(Theme.panel)
                     if results.isEmpty {
                         Text(t.s("No encontré ese lugar.", "No place by that name.")).foregroundStyle(Theme.lilac).listRowBackground(Color.clear)
+                    } else if results.count > 1 {
+                        Button { store.addPlaces(results.map(\.name)); UIImpactFeedbackGenerator(style: .medium).impactOccurred() } label: {
+                            Label(t.s("Agregar todos (\(results.count))", "Add all (\(results.count))"), systemImage: "plus.square.on.square")
+                        }
+                        .listRowBackground(Theme.panel)
                     }
                 }
             }
@@ -573,6 +638,7 @@ struct PlaceSearchSheet: View {
                 try? await Task.sleep(for: .milliseconds(200))
                 results = await MapWeb.shared.search(query)
             }
+            .task { cats = await MapWeb.shared.categories() }
         }
     }
 }
