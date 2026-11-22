@@ -268,30 +268,6 @@ struct CollectibleAddSheet: View {
 }
 
 /// Mapa: llega en la fase 4 (importar el mapa y poner pines sincronizados).
-struct MapaView: View {
-    @EnvironmentObject private var settings: AppSettings
-    var body: some View {
-        let t = settings.t
-        NavigationStack {
-            VStack(spacing: 16) {
-                Spacer()
-                Image("TabColor_mapa").resizable().scaledToFit().frame(width: 120, height: 120)
-                Text(t.s("PRÓXIMAMENTE", "COMING SOON")).font(Theme.display(30)).foregroundStyle(.white)
-                Text(t.s("Aquí vas a importar tu mapa de Leonida y ponerle pines a tus lugares. Llega en la fase 4.",
-                         "Here you'll import your Leonida map and pin your places. Coming in phase 4."))
-                    .font(Theme.text(15, relativeTo: .subheadline))
-                    .foregroundStyle(Theme.lilac)
-                    .multilineTextAlignment(.center)
-                    .padding(.horizontal, 40)
-                Spacer()
-                Spacer()
-            }
-            .frame(maxWidth: .infinity)
-            .background(Theme.menu.ignoresSafeArea())
-            .navigationTitle(t.s("MAPA", "MAP"))
-        }
-    }
-}
 
 
 // MARK: - Challenges

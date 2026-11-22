@@ -15,6 +15,7 @@ struct RootView: View {
     @State private var showChats = false
     @EnvironmentObject private var chats: ProjectChats
     @State private var showLoading = true
+    @ObservedObject private var inbox = IntentInbox.shared
 
     var body: some View {
         ZStack {
@@ -131,13 +132,30 @@ struct RootView: View {
             web.setPrefix(state.prefix(lang: settings.language))
         }
         .onChange(of: scenePhase) { _, phase in
-            if phase == .active { Task { await skin.refresh() } }
+            if phase == .active { Task { await skin.refresh() }; Notifier.shared.becameActive(); deliverInbox() }
+            if phase == .background { Notifier.shared.wentToBackground(streaming: web.isStreaming) }
         }
+        .onChange(of: web.isStreaming) { _, on in
+            Notifier.shared.streamingChanged(on, inBackground: scenePhase != .active, lang: settings.language)
+        }
+        .onChange(of: inbox.pendingMessage) { _, _ in deliverInbox() }
+        .onChange(of: inbox.openMarisol) { _, on in if on { state.tab = .marisol; inbox.openMarisol = false } }
+        .onChange(of: web.hasLoadedOnce) { _, _ in deliverInbox() }
         .task {
             // Mínimo de 1.2 s pa' que la pantalla de carga no parpadee.
             try? await Task.sleep(for: .seconds(1.2))
             while !web.hasLoadedOnce { try? await Task.sleep(for: .milliseconds(150)) }
             withAnimation(.easeOut(duration: 0.5)) { showLoading = false }
+        }
+    }
+
+    /// Lo que llegó por Siri / Atajos: se manda a Marisol cuando el chat ya cargó.
+    private func deliverInbox() {
+        guard let msg = inbox.pendingMessage, web.hasLoadedOnce else { return }
+        inbox.pendingMessage = nil
+        state.tab = .marisol
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.6) {
+            if web.showsNewChat { web.startNewChat(msg) } else { web.send(msg) }
         }
     }
 }

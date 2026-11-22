@@ -9,7 +9,10 @@ struct PockitApp: App {
     @StateObject private var store = PockitStore()
     @StateObject private var chats = ProjectChats()
 
-    init() { Theme.applyUIKitAppearance() }
+    init() {
+        Theme.applyUIKitAppearance()
+        Notifier.shared.setUp()
+    }
 
     var body: some Scene {
         WindowGroup {

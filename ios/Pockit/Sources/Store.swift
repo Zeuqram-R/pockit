@@ -149,6 +149,18 @@ struct MissionEntry: Codable, Identifiable, Hashable {
     var at = Date()
 }
 
+/// Pin en el mapa propio de Jose (x/y van de 0 a 1 sobre la imagen).
+struct MapPin: Codable, Identifiable, Hashable {
+    var id = UUID()
+    var x: Double
+    var y: Double
+    var name: String
+    var note: String = ""
+    var kind: String = "pin"   // pin, secreto, coleccionable, foto, negocio
+    var done = false
+    var at = Date()
+}
+
 struct PockitData: Codable {
     var version = 2
     var pendientes: [Pendiente] = []
@@ -167,6 +179,7 @@ struct PockitData: Codable {
     var vehicles: [Vehicle] = []
     var seededV4 = false
     var seededV5 = false
+    var pins: [MapPin] = []
     var updatedAt = Date()
 
     init() {}
@@ -191,6 +204,7 @@ struct PockitData: Codable {
         vehicles = try c.decodeIfPresent([Vehicle].self, forKey: .vehicles) ?? []
         seededV4 = try c.decodeIfPresent(Bool.self, forKey: .seededV4) ?? false
         seededV5 = try c.decodeIfPresent(Bool.self, forKey: .seededV5) ?? false
+        pins = try c.decodeIfPresent([MapPin].self, forKey: .pins) ?? []
         updatedAt = try c.decodeIfPresent(Date.self, forKey: .updatedAt) ?? Date()
     }
 }
@@ -706,6 +720,14 @@ final class PockitStore: ObservableObject {
         }
         mutate { $0.missions.append(MissionEntry(name: name, pct: pct, at: date)) }
     }
+
+    // MARK: Mapa
+    func savePin(_ p: MapPin) {
+        mutate { d in
+            if let i = d.pins.firstIndex(where: { $0.id == p.id }) { d.pins[i] = p } else { d.pins.append(p) }
+        }
+    }
+    func delete(_ p: MapPin) { mutate { $0.pins.removeAll { $0.id == p.id } } }
 
     func delete(_ m: MissionEntry) { mutate { $0.missions.removeAll { $0.id == m.id } } }
 }
