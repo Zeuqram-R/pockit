@@ -19,6 +19,8 @@ final class WebModel: NSObject, ObservableObject {
     @Published var currentPath = ""
     /// Marisol está escribiendo (lo avisa chat.js).
     @Published var isStreaming = false
+    /// Los puntitos de escribiendo van en el retrato de Marisol (la caja tapa todo el chat).
+    @Published var dotsDocked = false
     var isChatPage: Bool { currentPath.hasPrefix("/chat/") }
 
     /// Lo llama el puente JS con las etiquetas de Marisol.
@@ -235,6 +237,8 @@ final class WebModel: NSObject, ObservableObject {
             if let items = dict["items"] as? [[String: Any]] { onTags?(items) }
         case "streaming":
             isStreaming = (dict["on"] as? Bool) ?? false
+        case "dotsDocked":
+            dotsDocked = (dict["on"] as? Bool) ?? false
         case "projectChats":
             if let items = dict["items"] as? [[String: Any]] { onProjectChats?(items) }
         case "sendResult":

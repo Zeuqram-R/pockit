@@ -8,6 +8,7 @@ struct AvatarView: View {
     let mood: Mood
     var size: CGFloat = 52
     var spoilerDot = false
+    var typing = false
 
     @StateObject private var player = AvatarPlayer()
     @State private var breathe = false
@@ -44,6 +45,14 @@ struct AvatarView: View {
                     .overlay(Circle().stroke(Theme.night, lineWidth: 2))
             }
         }
+        .overlay(alignment: .bottomTrailing) {
+            if typing {
+                TypingBadge()
+                    .offset(x: 30, y: 4)
+                    .transition(.scale(scale: 0.4, anchor: .topLeading).combined(with: .opacity))
+            }
+        }
+        .animation(.spring(response: 0.4, dampingFraction: 0.7), value: typing)
         .onAppear {
             player.show(mood, animated: false)
             withAnimation(.easeInOut(duration: 2.8).repeatForever(autoreverses: true)) { breathe = true }
@@ -203,5 +212,31 @@ struct PlayerLayerView: UIViewRepresentable {
     final class PlayerUIView: UIView {
         override class var layerClass: AnyClass { AVPlayerLayer.self }
         var playerLayer: AVPlayerLayer { layer as! AVPlayerLayer }
+    }
+}
+
+
+/// Los tres puntitos de "Marisol está escribiendo", pegados a su retrato cuando la caja de escribir
+/// ocupa todo el chat y ya no hay dónde mostrarlos abajo.
+struct TypingBadge: View {
+    @State private var phase = 0
+    private let timer = Timer.publish(every: 0.32, on: .main, in: .common).autoconnect()
+    var body: some View {
+        HStack(spacing: 4) {
+            ForEach(0..<3) { i in
+                Circle().fill(Color.white)
+                    .frame(width: 6, height: 6)
+                    .opacity(phase == i ? 1 : 0.45)
+                    .offset(y: phase == i ? -1.5 : 0)
+            }
+        }
+        .padding(.horizontal, 9)
+        .frame(height: 22)
+        .background(Capsule().fill(.ultraThinMaterial))
+        .background(Capsule().fill(Theme.nightDeep.opacity(0.55)))
+        .overlay(Capsule().stroke(Color.white.opacity(0.22), lineWidth: 1))
+        .environment(\.colorScheme, .dark)
+        .onReceive(timer) { _ in withAnimation(.easeInOut(duration: 0.25)) { phase = (phase + 1) % 3 } }
+        .accessibilityLabel("Marisol está escribiendo")
     }
 }

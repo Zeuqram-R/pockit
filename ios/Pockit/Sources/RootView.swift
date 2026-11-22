@@ -168,7 +168,7 @@ struct TopBar: View {
 
             Button(action: onAvatar) {
                 VStack(spacing: 4) {
-                    AvatarView(mood: state.mood, size: 58, spoilerDot: state.lastReplyHadSpoiler)
+                    AvatarView(mood: state.mood, size: 58, spoilerDot: state.lastReplyHadSpoiler, typing: web.dotsDocked)
                     HStack(spacing: 3) {
                         Text("Marisol").font(Theme.text(15, .semibold, relativeTo: .subheadline))
                         Image(systemName: "chevron.right").font(.system(size: 10, weight: .bold)).opacity(0.7)
