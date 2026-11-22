@@ -57,14 +57,12 @@ struct IconSegments<T: Hashable>: View {
     }
 }
 
-/// Barra de navegación que se difumina poco a poco al hacer scroll (en vez de aparecer de golpe).
 /// Barra de arriba que se oscurece poco a poco al bajar. Arriba del todo es del mismo color que el fondo.
 /// Con `largeTitle`, el título grande va dentro del contenido (LargeTitleRow) y se difumina al subir,
 /// mientras el título chiquito aparece poco a poco en la barra (nada de títulos cortados).
 struct FadingNavBar: ViewModifier {
     var title: String? = nil
     @State private var progress: CGFloat = 0
-    @State private var baseline: CGFloat? = nil
 
     func body(content: Content) -> some View {
         if #available(iOS 18.0, *) {
@@ -72,18 +70,35 @@ struct FadingNavBar: ViewModifier {
                 .onScrollGeometryChange(for: CGFloat.self) { g in
                     g.contentOffset.y + g.contentInsets.top
                 } action: { _, y in
-                    // El punto de reposo es "cero", aunque el sistema arranque con un desfase.
-                    if baseline == nil || y < baseline! { baseline = y }
-                    let d = y - (baseline ?? 0)
-                    progress = min(max(d / 90, 0), 1)
+                    // y = 0 es arriba del todo (el rebote hacia abajo da negativo y se ignora).
+                    progress = min(max(y / 90, 0), 1)
                 }
                 .environment(\.navFade, progress)
-                .toolbarBackground(Theme.nightDeep.opacity(0.88 * progress), for: .navigationBar)
-                .toolbarBackground(.visible, for: .navigationBar)
+                // La barra del sistema queda siempre transparente (si le pasamos un color transparente, iOS pone
+                // su barra gris por defecto). El fondo que se oscurece lo dibujamos nosotros, debajo de los títulos.
+                .toolbarBackground(.hidden, for: .navigationBar)
+                .overlay(alignment: .top) { NavFadeBackground(progress: progress) }
                 .modifier(InlineFadingTitle(title: title, progress: progress))
         } else {
             if let title { content.navigationTitle(title) } else { content }
         }
+    }
+}
+
+private struct NavFadeBackground: View {
+    let progress: CGFloat
+    var body: some View {
+        GeometryReader { g in
+            VStack(spacing: 0) {
+                Rectangle().fill(Theme.nightDeep.opacity(0.88 * progress))
+                    .frame(height: g.safeAreaInsets.top)
+                Rectangle().fill(Color.white.opacity(0.12 * progress))
+                    .frame(height: 0.5)
+                Spacer(minLength: 0)
+            }
+        }
+        .ignoresSafeArea(edges: .top)
+        .allowsHitTesting(false)
     }
 }
 
