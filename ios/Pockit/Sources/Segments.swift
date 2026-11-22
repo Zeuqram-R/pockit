@@ -3,6 +3,7 @@ import SwiftUI
 /// Ícono de una sección: uno de nuestros íconos (en el estilo elegido) o un símbolo mientras se diseña el suyo.
 enum SegIcon {
     case tab(PockitTab)
+    case asset(String)
     case symbol(String)
 }
 
@@ -49,6 +50,10 @@ struct IconSegments<T: Hashable>: View {
                 .frame(width: 40, height: 40)
                 .scaleEffect(0.85)
                 .clipped()
+        case .asset(let name):
+            StyledIcon(name: name, active: active, style: settings.tabIconStyle)
+                .frame(width: 40, height: 40)
+                .scaleEffect(0.85)
         case .symbol(let name):
             Image(systemName: name)
                 .font(.system(size: 20, weight: .semibold))

@@ -18,8 +18,8 @@ struct CollectiblesView: View {
                 LargeTitleRow(text: "PROGRESS")
                 Section {
                     IconSegments(items: [
-                        (ProgressSection.collections, "Collections", .tab(.collectibles)),
-                        (ProgressSection.challenges, "Challenges", .symbol("flag.checkered")),
+                        (ProgressSection.collections, "Collections", .asset("collections")),
+                        (ProgressSection.challenges, "Challenges", .asset("challenges")),
                         (ProgressSection.activities, "Activities", .symbol("figure.run")),
                     ], selection: $section)
                     .listRowBackground(Color.clear)
@@ -29,7 +29,7 @@ struct CollectiblesView: View {
                 case .collections:
                 Section {
                     HStack(spacing: 14) {
-                        Image("TabColor_collectibles").resizable().scaledToFit().frame(width: 54, height: 54)
+                        Image("TabColor_collections").resizable().scaledToFit().frame(width: 54, height: 54)
                         VStack(alignment: .leading, spacing: 2) {
                             Text("\(store.collectiblesFound)")
                                 .font(Theme.display(40)).foregroundStyle(.white)

@@ -78,17 +78,29 @@ struct TabItemView: View {
         .animation(.easeOut(duration: 0.18), value: active)
     }
 
-    @ViewBuilder private var icon: some View {
-        if style == .color || tab == .marisol {
-            Image(active ? "TabColor_\(tab.rawValue)" : "TabOff_\(tab.rawValue)")
+    private var icon: some View {
+        StyledIcon(name: tab.rawValue, active: active, style: tab == .marisol ? .color : style)
+    }
+}
+
+/// Ícono con los dos estilos: a color (activo) / contorno (inactivo), o glifo del juego (cuadrito activo / blanco inactivo).
+/// Usa las imágenes TabColor_, TabOff_, TabGlyph_ y TabGlyphDark_ + nombre.
+struct StyledIcon: View {
+    let name: String
+    let active: Bool
+    let style: TabIconStyle
+
+    var body: some View {
+        if style == .color {
+            Image(active ? "TabColor_\(name)" : "TabOff_\(name)")
                 .resizable()
                 .scaledToFit()
                 .frame(width: active ? 38 : 33, height: active ? 38 : 33)
                 .opacity(active ? 1 : 0.85)
         } else if active {
-            ActiveGlyphTile(imageName: "TabGlyphDark_\(tab.rawValue)", side: 38)
+            ActiveGlyphTile(imageName: "TabGlyphDark_\(name)", side: 38)
         } else {
-            Image("TabGlyph_\(tab.rawValue)")
+            Image("TabGlyph_\(name)")
                 .resizable()
                 .scaledToFit()
                 .frame(width: 26, height: 26)

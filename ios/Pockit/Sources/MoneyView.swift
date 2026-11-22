@@ -24,8 +24,8 @@ struct MoneyView: View {
                 Section {
                     IconSegments(items: [
                         (MoneySection.dinero, "Money", .tab(.money)),
-                        (MoneySection.propiedades, t.s("Propiedades", "Properties"), .symbol("house.fill")),
-                        (MoneySection.garage, "Garage", .symbol("car.fill")),
+                        (MoneySection.propiedades, t.s("Propiedades", "Properties"), .asset("properties")),
+                        (MoneySection.garage, "Garage", .asset("garage")),
                     ], selection: $section)
                     .listRowBackground(Color.clear)
                     .listRowInsets(EdgeInsets(top: 4, leading: 0, bottom: 4, trailing: 0))
