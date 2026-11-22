@@ -52,6 +52,12 @@ jobs:
           echo "VER=$VER" >> "$GITHUB_ENV"
           mkdir -p Payload
           cp -R build/Build/Products/Release-iphoneos/Pockit.app Payload/
+          # Firma ad-hoc solo pa' dejar escritos los permisos (App Group del widget); Signulous vuelve a firmar.
+          if [ -d Payload/Pockit.app/PlugIns/PockitWidget.appex ]; then
+            codesign -f -s - --entitlements PockitWidget/PockitWidget.entitlements Payload/Pockit.app/PlugIns/PockitWidget.appex
+          fi
+          codesign -f -s - --entitlements Pockit/Pockit.entitlements Payload/Pockit.app
+          codesign -d --entitlements - Payload/Pockit.app 2>/dev/null | head -20 || true
           zip -qry "$NOMBRE" Payload
           ls -lh "$NOMBRE"
 

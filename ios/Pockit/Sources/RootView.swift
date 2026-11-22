@@ -121,6 +121,7 @@ struct RootView: View {
         .onAppear {
             state.onEvent = { tag in store.ingest(tag) }
             SyncManager.shared.attach(store: store, state: state)
+            WidgetBridge.update(store: store, state: state, lang: settings.language)
             Task { await SyncManager.shared.sync() }
             // Si nunca se guardó la última conversación, abrir la más reciente del panel.
             if UserDefaults.standard.string(forKey: WebModel.lastChatKey) == nil,
@@ -144,6 +145,10 @@ struct RootView: View {
             Notifier.shared.streamingChanged(on, inBackground: scenePhase != .active, lang: settings.language)
         }
         .onChange(of: inbox.pendingMessage) { _, _ in deliverInbox() }
+        .onChange(of: store.data.updatedAt) { _, _ in WidgetBridge.update(store: store, state: state, lang: settings.language) }
+        .onChange(of: state.mood) { _, _ in WidgetBridge.update(store: store, state: state, lang: settings.language) }
+        .onChange(of: state.progressPct) { _, _ in WidgetBridge.update(store: store, state: state, lang: settings.language) }
+        .onOpenURL { _ in state.tab = .marisol }
         .onChange(of: inbox.openMarisol) { _, on in if on { state.tab = .marisol; inbox.openMarisol = false } }
         .onChange(of: web.hasLoadedOnce) { _, _ in deliverInbox() }
         .task {
