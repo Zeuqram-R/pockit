@@ -53,7 +53,8 @@ struct IconSegments<T: Hashable>: View {
         case .asset(let name):
             StyledIcon(name: name, active: active, style: settings.tabIconStyle)
                 .frame(width: 40, height: 40)
-                .scaleEffect(1.02)
+                // 20% más grandes que en la barra de abajo, en los dos estilos
+                .scaleEffect(settings.tabIconStyle == .game ? 1.2 : 1.02)
         case .symbol(let name):
             Image(systemName: name)
                 .font(.system(size: 24, weight: .semibold))
