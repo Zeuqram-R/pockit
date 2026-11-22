@@ -69,8 +69,10 @@ final class MapWeb: NSObject, ObservableObject, WKScriptMessageHandler, WKNaviga
     @Published var failed = false
     var onLongPress: ((Double, Double, String?, String?) -> Void)?
     var onPinTap: ((UUID) -> Void)?
+    var onPlaceTap: ((GamePlace) -> Void)?
     private var started = false
     private var pendingPins: String = "[]"
+    private var pendingPlaces: String = "[]"
 
     override init() {
         let cfg = WKWebViewConfiguration()
@@ -112,18 +114,36 @@ final class MapWeb: NSObject, ObservableObject, WKScriptMessageHandler, WKNaviga
         if ready { webView.evaluateJavaScript("window.pkSetPins && window.pkSetPins(\(json))") }
     }
 
+    func setPlaces(_ names: [String]) {
+        let json = String(data: (try? JSONSerialization.data(withJSONObject: names)) ?? Data("[]".utf8), encoding: .utf8) ?? "[]"
+        pendingPlaces = json
+        if ready { webView.evaluateJavaScript("window.pkSetPlaces && window.pkSetPlaces(\(json))") }
+    }
+
+    func search(_ q: String) async -> [GamePlace] {
+        guard ready else { return [] }
+        let r = try? await webView.callAsyncJavaScript("return JSON.stringify(window.pkSearch ? window.pkSearch(q) : [])", arguments: ["q": q], contentWorld: .page)
+        guard let str = r as? String, let d = str.data(using: .utf8),
+              let arr = try? JSONSerialization.jsonObject(with: d) as? [[String: Any]] else { return [] }
+        return arr.compactMap { o in (o["name"] as? String).map { GamePlace(name: $0, category: o["cat"] as? String ?? "") } }
+    }
+
+    func focusPlace(_ name: String) {
+        _ = webView.callAsyncJavaScript("return window.pkFocusPlace && window.pkFocusPlace(n)", arguments: ["n": name], in: nil, in: .page) { _ in }
+    }
+
     func flyTo(_ p: MapPin) { webView.evaluateJavaScript("window.pkFlyTo && window.pkFlyTo(\(p.y), \(p.x))") }
 
-    /// Centra el pin, espera a que carguen los cuadritos del mapa y le toma foto (pa' mandársela a Marisol).
-    func snapshot(of p: MapPin) async -> (Data?, String?, String?) {
+    /// Centra el punto, espera a que carguen los cuadritos del mapa y le toma foto (pa' mandársela a Marisol).
+    func snapshot(lat: Double, lng: Double) async -> (Data?, String?, String?) {
         let view = try? await webView.evaluateJavaScript("JSON.stringify(window.pkView ? window.pkView() : null)") as? String
-        let near = try? await webView.evaluateJavaScript("JSON.stringify(window.pkFocus(\(p.y), \(p.x), 4))") as? String
-        try? await Task.sleep(for: .milliseconds(900))
-        let cfg = WKSnapshotConfiguration()
-        let img = try? await webView.takeSnapshot(configuration: cfg)
+        let near = try? await webView.callAsyncJavaScript("return JSON.stringify(await window.pkFocusWait(lat, lng, 4))",
+                                                         arguments: ["lat": lat, "lng": lng], contentWorld: .page) as? String
+        try? await Task.sleep(for: .milliseconds(150))
+        let img = try? await webView.takeSnapshot(configuration: WKSnapshotConfiguration())
         if let view, let d = view.data(using: .utf8), let v = try? JSONSerialization.jsonObject(with: d) as? [String: Double],
-           let lat = v["lat"], let lng = v["lng"], let z = v["zoom"] {
-            _ = try? await webView.evaluateJavaScript("window.pkSetView(\(lat), \(lng), \(z))")
+           let la = v["lat"], let ln = v["lng"], let z = v["zoom"] {
+            _ = try? await webView.evaluateJavaScript("window.pkSetView(\(la), \(ln), \(z))")
         }
         var place: String?, county: String?
         if let near, let d = near.data(using: .utf8), let o = try? JSONSerialization.jsonObject(with: d) as? [String: Any] {
@@ -131,6 +151,7 @@ final class MapWeb: NSObject, ObservableObject, WKScriptMessageHandler, WKNaviga
         }
         return (img?.jpegData(compressionQuality: 0.82), place, county)
     }
+    func snapshot(of p: MapPin) async -> (Data?, String?, String?) { await snapshot(lat: p.y, lng: p.x) }
 
     func userContentController(_ c: WKUserContentController, didReceive m: WKScriptMessage) {
         guard let d = m.body as? [String: Any], let type = d["type"] as? String else { return }
@@ -138,12 +159,19 @@ final class MapWeb: NSObject, ObservableObject, WKScriptMessageHandler, WKNaviga
         case "ready":
             ready = true
             webView.evaluateJavaScript("window.pkSetPins && window.pkSetPins(\(pendingPins))")
+            webView.evaluateJavaScript("window.pkSetPlaces && window.pkSetPlaces(\(pendingPlaces))")
         case "error":
             failed = true
         case "longPress":
             let near = d["near"] as? [String: Any]
             UIImpactFeedbackGenerator(style: .medium).impactOccurred()
             onLongPress?(d["lat"] as? Double ?? 0, d["lng"] as? Double ?? 0, near?["place"] as? String, near?["county"] as? String)
+        case "placeTap":
+            let near = d["near"] as? [String: Any]
+            UIImpactFeedbackGenerator(style: .light).impactOccurred()
+            onPlaceTap?(GamePlace(name: d["name"] as? String ?? "", category: d["cat"] as? String ?? "",
+                                  lat: d["lat"] as? Double ?? 0, lng: d["lng"] as? Double ?? 0,
+                                  place: near?["place"] as? String, county: near?["county"] as? String))
         case "pinTap":
             if let s = d["id"] as? String, let id = UUID(uuidString: s) {
                 UIImpactFeedbackGenerator(style: .light).impactOccurred()
@@ -194,6 +222,8 @@ struct MapaView: View {
     @State private var editingNear: (String?, String?) = (nil, nil)
     @State private var filter: PinKind?
     @State private var showList = false
+    @State private var showPlaces = false
+    @State private var tappedPlace: GamePlace?
 
     var body: some View {
         let t = settings.t
@@ -227,22 +257,16 @@ struct MapaView: View {
                         .padding(.bottom, 100)
                 }
             }
-            .overlay(alignment: .bottomTrailing) {
-                if map.ready {
-                    Link(destination: MapWeb.url) {
-                        Text("Mapa: GTABase.com").font(Theme.text(10, .medium)).foregroundStyle(.white.opacity(0.8))
-                            .padding(.horizontal, 8).padding(.vertical, 4)
-                            .background(Capsule().fill(Color.black.opacity(0.25)))
-                    }
-                    .padding(.trailing, 10).padding(.bottom, 92)
-                }
-            }
             .navigationTitle(t.s("MAPA", "MAP"))
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .topBarLeading) {
                     Button { showList = true } label: { Image(systemName: "list.bullet") }
                         .accessibilityLabel(t.s("Lista de pines", "Pin list"))
+                }
+                ToolbarItem(placement: .primaryAction) {
+                    Button { showPlaces = true } label: { Image(systemName: "mappin.and.ellipse") }
+                        .accessibilityLabel(t.s("Lugares del juego", "Game places"))
                 }
             }
             .onAppear {
@@ -253,18 +277,30 @@ struct MapaView: View {
                     editingNear = (place, county)
                     editing = p
                 }
+                map.onPlaceTap = { p in tappedPlace = p }
                 map.onPinTap = { id in
                     if let p = store.data.pins.first(where: { $0.id == id }) { editingNear = (nil, nil); editing = p }
                 }
                 pushPins()
             }
             .onChange(of: store.data.pins) { _, _ in pushPins() }
+            .onChange(of: store.data.places) { _, _ in map.setPlaces(store.data.places) }
             .onChange(of: filter) { _, _ in pushPins() }
             .onChange(of: map.ready) { _, _ in pushPins() }
             .sheet(item: $editing) { pin in
                 PinSheet(pin: pin, place: editingNear.0, county: editingNear.1) { editing = nil }
                     .environmentObject(settings).environmentObject(store).environmentObject(state).environmentObject(web)
                     .presentationDetents([.medium, .large])
+            }
+            .sheet(isPresented: $showPlaces) {
+                PlaceSearchSheet { name in showPlaces = false; DispatchQueue.main.asyncAfter(deadline: .now() + 0.4) { map.focusPlace(name) } }
+                    .environmentObject(settings).environmentObject(store)
+                    .presentationDetents([.medium, .large])
+            }
+            .sheet(item: $tappedPlace) { p in
+                PlaceSheet(place: p) { tappedPlace = nil }
+                    .environmentObject(settings).environmentObject(store).environmentObject(state).environmentObject(web)
+                    .presentationDetents([.height(320), .medium])
             }
             .sheet(isPresented: $showList) {
                 PinListSheet { pin in
@@ -279,6 +315,7 @@ struct MapaView: View {
     }
 
     private func pushPins() {
+        map.setPlaces(store.data.places)
         map.setPins(store.data.pins.filter { $0.space == "gtab" && (filter == nil || $0.kind == filter!.rawValue) })
     }
 
@@ -462,3 +499,135 @@ struct PinListSheet: View {
     }
 }
 
+
+// MARK: - Lugares del juego (los del mapa de GTABase que ya desbloqueaste)
+struct GamePlace: Identifiable, Hashable {
+    var id: String { name }
+    var name: String
+    var category: String
+    var lat: Double = 0
+    var lng: Double = 0
+    var place: String? = nil
+    var county: String? = nil
+}
+
+struct PlaceSearchSheet: View {
+    @EnvironmentObject private var settings: AppSettings
+    @EnvironmentObject private var store: PockitStore
+    let open: (String) -> Void
+    @State private var query = ""
+    @State private var results: [GamePlace] = []
+
+    var body: some View {
+        let t = settings.t
+        NavigationStack {
+            List {
+                if query.count < 3 {
+                    Section {
+                        Text(t.s("Escribí el nombre de un lugar que ya desbloqueaste (ej. Chuck's Tackle) y tocá ＋ pa' ponerlo en tu mapa. Así solo ves lo que ya tenés, sin spoilers.",
+                                 "Type a place you've already unlocked (e.g. Chuck's Tackle) and tap ＋ to add it to your map. You only see what you have, no spoilers."))
+                            .font(Theme.text(14)).foregroundStyle(Theme.lilac)
+                    }
+                    .listRowBackground(Color.clear)
+                    if !store.data.places.isEmpty {
+                        Section(t.s("En tu mapa", "On your map")) {
+                            ForEach(store.data.places, id: \.self) { n in
+                                Button { open(n) } label: { Text(n).foregroundStyle(.white) }
+                                    .swipeActions { Button(role: .destructive) { store.removePlace(n) } label: { Label(t.s("Quitar", "Remove"), systemImage: "minus.circle") } }
+                            }
+                        }
+                        .listRowBackground(Theme.panel)
+                    }
+                } else {
+                    ForEach(results) { r in
+                        let have = store.data.places.contains { $0.caseInsensitiveCompare(r.name) == .orderedSame }
+                        HStack {
+                            VStack(alignment: .leading, spacing: 2) {
+                                Text(r.name).foregroundStyle(.white)
+                                Text(r.category).font(Theme.text(12)).foregroundStyle(Theme.lilac)
+                            }
+                            Spacer()
+                            Button {
+                                if have { store.removePlace(r.name) } else { store.addPlace(r.name); UIImpactFeedbackGenerator(style: .light).impactOccurred() }
+                            } label: {
+                                Image(systemName: have ? "checkmark.circle.fill" : "plus.circle.fill")
+                                    .font(.system(size: 24)).foregroundStyle(have ? Theme.teal : Theme.switchPink)
+                            }
+                            .buttonStyle(.plain)
+                        }
+                        .contentShape(Rectangle())
+                        .onTapGesture { if have { open(r.name) } }
+                    }
+                    .listRowBackground(Theme.panel)
+                    if results.isEmpty {
+                        Text(t.s("No encontré ese lugar.", "No place by that name.")).foregroundStyle(Theme.lilac).listRowBackground(Color.clear)
+                    }
+                }
+            }
+            .scrollContentBackground(.hidden)
+            .background(Theme.menu.ignoresSafeArea())
+            .searchable(text: $query, placement: .navigationBarDrawer(displayMode: .always), prompt: t.s("Buscar lugar", "Search place"))
+            .navigationTitle(t.s("Lugares del juego", "Game places"))
+            .navigationBarTitleDisplayMode(.inline)
+            .task(id: query) {
+                try? await Task.sleep(for: .milliseconds(200))
+                results = await MapWeb.shared.search(query)
+            }
+        }
+    }
+}
+
+struct PlaceSheet: View {
+    @EnvironmentObject private var settings: AppSettings
+    @EnvironmentObject private var store: PockitStore
+    @EnvironmentObject private var state: PockitState
+    @EnvironmentObject private var web: WebModel
+    let place: GamePlace
+    let close: () -> Void
+    @State private var asking = false
+
+    var body: some View {
+        let t = settings.t
+        NavigationStack {
+            Form {
+                Section {
+                    Text(place.category).foregroundStyle(Theme.lilac)
+                    let zone = [place.place, place.county].compactMap { $0 }.joined(separator: " · ")
+                    if !zone.isEmpty { Text(zone).foregroundStyle(Theme.lilac) }
+                }
+                .listRowBackground(Theme.panel)
+                Section {
+                    Button { ask() } label: { Label(t.s("Preguntarle a Marisol", "Ask Marisol"), systemImage: "bubble.left.fill") }
+                    Button(role: .destructive) { store.removePlace(place.name); close() } label: { Label(t.s("Quitar de mi mapa", "Remove from my map"), systemImage: "minus.circle") }
+                }
+                .listRowBackground(Theme.panel)
+                .disabled(asking)
+            }
+            .scrollContentBackground(.hidden)
+            .background(Theme.menu.ignoresSafeArea())
+            .navigationTitle(place.name)
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar { ToolbarItem(placement: .confirmationAction) { Button("OK") { close() } } }
+            .overlay { if asking { ProgressView().tint(.white).padding(20).background(RoundedRectangle(cornerRadius: 14).fill(.ultraThinMaterial)) } }
+        }
+    }
+
+    private func ask() {
+        let t = settings.t
+        asking = true
+        Task {
+            let (img, _, _) = await MapWeb.shared.snapshot(lat: place.lat, lng: place.lng)
+            let zone = [place.place, place.county].compactMap { $0 }.joined(separator: ", ")
+            let msg = t.s("📍 Mapa: estoy viendo \(place.name) (\(place.category)\(zone.isEmpty ? "" : ", \(zone)")). ¿Qué vale la pena aquí y alrededor? Sin spoilers.",
+                          "📍 Map: I'm looking at \(place.name) (\(place.category)\(zone.isEmpty ? "" : ", \(zone)")). What's worth it here and around? No spoilers.")
+            if let img {
+                _ = await web.attach(data: img, name: "mapa-\(Int(Date().timeIntervalSince1970)).jpg", mime: "image/jpeg")
+                try? await Task.sleep(for: .milliseconds(900))
+            }
+            state.tab = .marisol
+            web.send(msg)
+            asking = false
+            close()
+        }
+    }
+}

@@ -7,6 +7,7 @@ struct QuickBar: View {
     @EnvironmentObject private var web: WebModel
     @EnvironmentObject private var state: PockitState
     @State private var showProgress = false
+    @ObservedObject private var inbox = IntentInbox.shared
 
     var body: some View {
         let t = settings.t
@@ -14,6 +15,7 @@ struct QuickBar: View {
             HStack(spacing: 8) {
                 chip("📍 " + t.qProgress, color: Theme.pink) { showProgress = true }
                 chip(t.qWhatNow, color: Theme.coral) { web.send(t.msgWhatNow) }
+                chip("🎮 " + t.s("Terminé", "Done playing"), color: Theme.teal) { inbox.showEndSession = true }
                 // Solo aparecen cuando Marisol está dando pistas de un secreto.
                 if state.hintsOpen {
                     chip(t.qHint, color: Theme.teal) { web.send(t.msgHint) }
@@ -27,6 +29,13 @@ struct QuickBar: View {
         .background(Theme.night)
         .overlay(alignment: .bottom) {
             Rectangle().fill(Theme.line).frame(height: 1)
+        }
+        .sheet(isPresented: $inbox.showEndSession) {
+            SessionEndSheet()
+                .environmentObject(settings)
+                .environmentObject(web)
+                .environmentObject(state)
+                .presentationDetents([.large])
         }
         .sheet(isPresented: $showProgress) {
             ProgressSheet()

@@ -125,6 +125,10 @@ struct SettingsView: View {
                 Section {
                     LabeledContent(t.version, value: Self.versionString)
                         .menuRow()
+                    Link(destination: URL(string: "https://www.gtabase.com/gta-6/map/")!) {
+                        LabeledContent(t.s("Mapa", "Map"), value: "GTABase.com")
+                    }
+                    .menuRow()
                 } header: {
                     SectionTitle(text: t.about)
                 }

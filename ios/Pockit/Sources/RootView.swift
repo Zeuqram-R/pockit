@@ -58,10 +58,13 @@ struct RootView: View {
                 }
                 .frame(maxHeight: .infinity)
 
-                if !keyboard.visible {
-                    PockitTabBar(selection: $state.tab, style: settings.tabIconStyle, t: settings.t)
-                        .transition(.move(edge: .bottom).combined(with: .opacity))
-                }
+                // 0.4.2: la barra ya no se quita del diseño cuando sale el teclado (eso estiraba el chat de golpe
+                // y hacía brincar la caja de escribir). Solo se desvanece; queda escondida detrás del teclado.
+                PockitTabBar(selection: $state.tab, style: settings.tabIconStyle, t: settings.t)
+                    .opacity(keyboard.visible ? 0 : 1)
+                    .offset(y: keyboard.visible ? 24 : 0)
+                    .allowsHitTesting(!keyboard.visible)
+                    .accessibilityHidden(keyboard.visible)
             }
             .animation(.easeOut(duration: 0.2), value: keyboard.visible)
 

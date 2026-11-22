@@ -198,6 +198,8 @@ struct PockitData: Codable {
     var seededV4 = false
     var seededV5 = false
     var pins: [MapPin] = []
+    /// Lugares del mapa de GTABase que ya desbloqueó en su partida (por nombre).
+    var places: [String] = []
     var updatedAt = Date()
 
     init() {}
@@ -222,7 +224,8 @@ struct PockitData: Codable {
         vehicles = try c.decodeIfPresent([Vehicle].self, forKey: .vehicles) ?? []
         seededV4 = try c.decodeIfPresent(Bool.self, forKey: .seededV4) ?? false
         seededV5 = try c.decodeIfPresent(Bool.self, forKey: .seededV5) ?? false
-        pins = try c.decodeIfPresent([MapPin].self, forKey: .pins) ?? []
+        pins = (try? c.decodeIfPresent([MapPin].self, forKey: .pins)) ?? []
+        places = try c.decodeIfPresent([String].self, forKey: .places) ?? []
         updatedAt = try c.decodeIfPresent(Date.self, forKey: .updatedAt) ?? Date()
     }
 }
@@ -510,6 +513,12 @@ final class PockitStore: ObservableObject {
             if let item = tag["item"] { announce("🎯", lang: item) }
             return
         }
+        if type == "place", let n = tag["name"], !n.isEmpty {
+            for one in n.split(separator: "|").map({ String($0).trimmingCharacters(in: .whitespaces) }) where addPlace(one) {
+                announce("🗺️", lang: L10n.current.s("En tu mapa: ", "On your map: ") + one)
+            }
+            return
+        }
         if type == "vehicle", let v = tag["name"], !v.isEmpty {
             if !data.vehicles.contains(where: { $0.name.caseInsensitiveCompare(v) == .orderedSame }) {
                 saveVehicle(Vehicle(name: v, kind: tag["kind"] ?? "car", location: tag["where"] ?? ""))
@@ -746,6 +755,14 @@ final class PockitStore: ObservableObject {
         }
     }
     func delete(_ p: MapPin) { mutate { $0.pins.removeAll { $0.id == p.id } } }
+    @discardableResult
+    func addPlace(_ name: String) -> Bool {
+        let n = name.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !n.isEmpty, !data.places.contains(where: { $0.caseInsensitiveCompare(n) == .orderedSame }) else { return false }
+        mutate { $0.places.append(n) }
+        return true
+    }
+    func removePlace(_ name: String) { mutate { $0.places.removeAll { $0.caseInsensitiveCompare(name) == .orderedSame } } }
 
     func delete(_ m: MissionEntry) { mutate { $0.missions.removeAll { $0.id == m.id } } }
 }

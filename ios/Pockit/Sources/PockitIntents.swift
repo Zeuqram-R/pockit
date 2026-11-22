@@ -9,6 +9,8 @@ final class IntentInbox: ObservableObject {
     @Published var pendingMessage: String?
     /// Abrir la pestaña de Marisol (al tocar una notificación).
     @Published var openMarisol = false
+    /// Abrir "Terminé de jugar".
+    @Published var showEndSession = false
 }
 
 private func lang() -> L10n { L10n.current }
@@ -52,6 +54,20 @@ struct WhereWasIIntent: AppIntent {
     func perform() async throws -> some IntentResult {
         IntentInbox.shared.pendingMessage = lang().s("¿Dónde me quedé? Dame un resumen corto de en qué iba, sin spoilers.",
                                                       "Where did I leave off? Give me a short recap, no spoilers.")
+        return .result()
+    }
+}
+
+// MARK: - Terminé de jugar
+struct EndSessionIntent: AppIntent {
+    static var title: LocalizedStringResource = "Terminé de jugar"
+    static var description = IntentDescription("Abre la hoja pa' contarle a Marisol qué hiciste.")
+    static var openAppWhenRun = true
+
+    @MainActor
+    func perform() async throws -> some IntentResult {
+        IntentInbox.shared.openMarisol = true
+        IntentInbox.shared.showEndSession = true
         return .result()
     }
 }
@@ -101,6 +117,10 @@ struct PockitShortcuts: AppShortcutsProvider {
             "Dónde me quedé en \(.applicationName)",
             "Where did I leave off in \(.applicationName)"
         ], shortTitle: "¿Dónde me quedé?", systemImageName: "arrow.uturn.backward.circle.fill")
+        AppShortcut(intent: EndSessionIntent(), phrases: [
+            "Terminé de jugar en \(.applicationName)",
+            "Done playing in \(.applicationName)"
+        ], shortTitle: "Terminé de jugar", systemImageName: "gamecontroller.fill")
         AppShortcut(intent: MyProgressIntent(), phrases: [
             "Mi progreso en \(.applicationName)",
             "Cómo voy en \(.applicationName)",
