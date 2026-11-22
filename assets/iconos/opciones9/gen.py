@@ -25,8 +25,11 @@ def luxe_fob(cx, cy, rot, s=1):
     g += f'<path d="{FOB}" fill="#221C2C" stroke="{O}" stroke-width="11" stroke-linejoin="round"/>'
     g += f'<path d="{FOB}" transform="scale(.9)" fill="none" stroke="#120E18" stroke-width="5"/>'
     for y in (-36, 0, 36):
-        g += R(-16, y - 12, 32, 24, '#18131F', 8, 4)
-    g += L('M-6 -40 L-6 -32 M6 -40 L6 -32', '#4A4256', 3) + Ci(0, 0, 5, '#4A4256', 0) + P('M-7 30 L7 30 L0 42 Z', '#4A4256', 0)
+        g += R(-16, y - 12, 32, 24, '#18131F', 8, 4) + R(-16, y - 12, 32, 24, 'none', 8, 0, 'stroke="url(#silver)" stroke-width="1.5" opacity=".6"')
+    # símbolos plateados: candado, desbloqueo y maletero
+    g += R(-7, -38, 14, 10, 'url(#silver)', 2, 0) + P('M-4 -38 L-4 -42 Q-4 -46 0 -46 Q4 -46 4 -42 L4 -38', 'none', 0, 'stroke="url(#silver)" stroke-width="2.5"')
+    g += R(-7, -2, 14, 10, 'url(#silver)', 2, 0) + P('M-4 -2 L-4 -6 Q-4 -10 0 -10 Q4 -10 6 -7', 'none', 0, 'stroke="url(#silver)" stroke-width="2.5"')
+    g += P('M-9 40 L-9 32 Q0 26 9 32 L9 40 Z', 'url(#silver)', 0)
     return g + '</g>'
 
 STRAP = 'M218 12 Q218 0 232 0 L280 0 Q294 0 294 12 L294 166 Q294 180 280 182 L232 182 Q218 180 218 166 Z'
