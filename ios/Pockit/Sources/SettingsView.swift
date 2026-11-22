@@ -122,6 +122,9 @@ struct SettingsView: View {
                     Text(t.pasteLinkFooter).font(Theme.text(13, relativeTo: .footnote)).foregroundStyle(Theme.lilac.opacity(0.85))
                 }
 
+                SyncSection()
+                    .environmentObject(settings)
+
                 Section {
                     LabeledContent(t.version, value: Self.versionString)
                         .menuRow()
@@ -211,5 +214,66 @@ struct SettingsView: View {
         let v = Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? "?"
         let b = Bundle.main.infoDictionary?["CFBundleVersion"] as? String ?? "?"
         return "\(v) (\(b))"
+    }
+}
+
+
+/// Ajustes → Sincronizar (iPhone, iPad y Mac con pockit-datos).
+struct SyncSection: View {
+    @EnvironmentObject private var settings: AppSettings
+    @ObservedObject private var sync = SyncManager.shared
+    @State private var editing = false
+    @State private var token = ""
+
+    var body: some View {
+        let t = settings.t
+        Section {
+            if sync.hasToken {
+                HStack {
+                    Label(statusText(t), systemImage: statusIcon).foregroundStyle(.white)
+                    Spacer()
+                    if case .syncing = sync.status { ProgressView().tint(.white) }
+                }
+                .menuRow()
+                Button { Task { await sync.sync() } } label: { Label(t.s("Sincronizar ahora", "Sync now"), systemImage: "arrow.triangle.2.circlepath") }
+                    .menuRow()
+                Button(role: .destructive) { sync.setToken(nil) } label: { Label(t.s("Quitar token de este dispositivo", "Remove token from this device"), systemImage: "key.slash") }
+                    .menuRow()
+            } else {
+                Button { token = ""; editing = true } label: { Label(t.s("Conectar con pockit-datos", "Connect to pockit-datos"), systemImage: "key.fill") }
+                    .menuRow()
+            }
+        } header: {
+            SectionTitle(text: t.s("SINCRONIZAR", "SYNC"))
+        } footer: {
+            Text(t.s("Pasa tu tracker, pines y lugares entre iPhone, iPad y Mac por tu repo privado pockit-datos. El token se guarda solo en el llavero de este dispositivo. Usá un token fine-grained con permiso Contents: Read and write solo para pockit-datos.",
+                     "Moves your tracker, pins and places between iPhone, iPad and Mac through your private pockit-datos repo. The token stays in this device's keychain. Use a fine-grained token with Contents: Read and write for pockit-datos only."))
+                .font(Theme.text(13, relativeTo: .footnote)).foregroundStyle(Theme.lilac.opacity(0.85))
+        }
+        .alert(t.s("Token de GitHub", "GitHub token"), isPresented: $editing) {
+            SecureField("github_pat_…", text: $token)
+            Button(t.cancel, role: .cancel) {}
+            Button(t.s("Guardar", "Save")) { sync.setToken(token) }
+        } message: {
+            Text(t.s("Pegalo aquí (no en el chat).", "Paste it here (not in the chat)."))
+        }
+    }
+
+    private var statusIcon: String {
+        switch sync.status {
+        case .error: return "exclamationmark.triangle.fill"
+        case .syncing: return "arrow.triangle.2.circlepath"
+        default: return "checkmark.icloud.fill"
+        }
+    }
+
+    private func statusText(_ t: L10n) -> String {
+        switch sync.status {
+        case .off: return t.s("Apagado", "Off")
+        case .idle: return t.s("Conectado", "Connected")
+        case .syncing: return t.s("Sincronizando…", "Syncing…")
+        case .ok(let d): return t.s("Al día · ", "Up to date · ") + Fmt.relative(d, lang: settings.language)
+        case .error(let e): return e
+        }
     }
 }

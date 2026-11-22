@@ -116,10 +116,19 @@
     var chosen = [], seen = {};
     places.forEach(function (name) { var e = findEntry(name); if (e && !seen[e.data.id]) { seen[e.data.id] = 1; chosen.push(e); } });
     if (placeCats.length) allEntries().forEach(function (e) { if (placeCats.indexOf(e.data.category) >= 0 && !seen[e.data.id]) { seen[e.data.id] = 1; chosen.push(e); } });
+    // v2: los que caen en el mismo punto (ej. Jason's House y su Meditation) se ponen uno al lado del otro
+    var groups = [];
+    chosen.forEach(function (e) {
+      var g = groups.find(function (gr) { return Math.abs(gr.x - e.data.x) < 12 && Math.abs(gr.y - e.data.y) < 12; });
+      if (g) g.items.push(e); else groups.push({ x: e.data.x, y: e.data.y, items: [e] });
+    });
+    var offset = new Map();
+    groups.forEach(function (g) { var n = g.items.length; g.items.forEach(function (e, i) { offset.set(e, (i - (n - 1) / 2) * 34); }); });
     chosen.forEach(function (e) {
       var c = catOf(e.data.category);
       var ll = window.GTAB.worldToLatLng(e.data.x, e.data.y);
-      var icon = L.divIcon({ className: "", html: "<div class='pk-place' style='--c:" + (c.color || "#333") + "'>" + iconHtml(e.data.category) + "</div>", iconSize: [30, 30], iconAnchor: [0, 0] });
+      var dx = offset.get(e) || 0;
+      var icon = L.divIcon({ className: "", html: "<div class='pk-place' style='--c:" + (c.color || "#333") + ";transform:translateX(" + dx + "px)'>" + iconHtml(e.data.category) + "</div>", iconSize: [30, 30], iconAnchor: [0, 0] });
       var m = L.marker(ll, { icon: icon, pane: "pkpins", keyboard: false });
       m.on("click", function () { post({ type: "placeTap", name: e.data.name, cat: c.name || e.data.category, lat: ll.lat, lng: ll.lng, near: nearby(ll) }); });
       placeLayer.addLayer(m);

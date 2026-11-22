@@ -120,6 +120,8 @@ struct RootView: View {
         }
         .onAppear {
             state.onEvent = { tag in store.ingest(tag) }
+            SyncManager.shared.attach(store: store, state: state)
+            Task { await SyncManager.shared.sync() }
             // Si nunca se guardó la última conversación, abrir la más reciente del panel.
             if UserDefaults.standard.string(forKey: WebModel.lastChatKey) == nil,
                let recent = chats.chats.first(where: { !$0.chatID.isEmpty }) {
@@ -135,7 +137,7 @@ struct RootView: View {
             web.setPrefix(state.prefix(lang: settings.language))
         }
         .onChange(of: scenePhase) { _, phase in
-            if phase == .active { Task { await skin.refresh() }; Notifier.shared.becameActive(); deliverInbox() }
+            if phase == .active { Task { await skin.refresh(); await SyncManager.shared.sync() }; Notifier.shared.becameActive(); deliverInbox() }
             if phase == .background { Notifier.shared.wentToBackground(streaming: web.isStreaming) }
         }
         .onChange(of: web.isStreaming) { _, on in

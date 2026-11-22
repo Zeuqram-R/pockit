@@ -479,7 +479,21 @@ final class PockitStore: ObservableObject {
         copy.updatedAt = Date()
         data = copy
         if let raw = try? Self.encoder.encode(copy) { try? raw.write(to: url, options: .atomic) }
+        onLocalChange?()
     }
+
+    // MARK: Sincronización
+    /// Avisa a la sincronización que hubo un cambio local (pa' subirlo).
+    var onLocalChange: (() -> Void)?
+
+    /// Reemplaza todo con lo que llegó de otro dispositivo (sin marcarlo como cambio local).
+    func replaceFromSync(_ d: PockitData) {
+        data = d
+        if let raw = try? Self.encoder.encode(d) { try? raw.write(to: url, options: .atomic) }
+    }
+
+    static func encodeForSync(_ d: PockitData) -> Data? { try? encoder.encode(d) }
+    static func decodeForSync(_ raw: Data) -> PockitData? { try? decoder.decode(PockitData.self, from: raw) }
 
     /// Las etiquetas que llegaron antes de la fase 3 quedaron en events.json: se importan una vez.
     private func importEventLog() {
