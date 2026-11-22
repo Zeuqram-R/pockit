@@ -43,7 +43,7 @@ fc = svg(SILVER + shadow(256, 486, 160) +
     R(230, 174, 52, 22, 'url(#silver)', 8, 8) +
     f'<circle cx="{RING[0]}" cy="{RING[1]}" r="{RING[2]}" fill="none" stroke="{O}" stroke-width="24"/>'
     f'<circle cx="{RING[0]}" cy="{RING[1]}" r="{RING[2]}" fill="none" stroke="url(#silver)" stroke-width="11"/>' +
-    HL('M228 210 A36 36 0 0 1 256 200', 4, .9) + HL('M238 16 L238 130', 6, .4) + spark(446, 92))
+    HL('M228 210 A36 36 0 0 1 256 200', 4, .9) + HL('M238 16 L238 130', 6, .4))
 
 # --- estilo juego ---
 def g_luxe_key(cx, cy, rot, s=1):

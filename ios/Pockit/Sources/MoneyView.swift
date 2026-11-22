@@ -23,7 +23,7 @@ struct MoneyView: View {
                 LargeTitleRow(text: "PORTFOLIO")
                 Section {
                     IconSegments(items: [
-                        (MoneySection.dinero, "Money", .asset("money")),
+                        (MoneySection.dinero, "Money", .asset("cash")),
                         (MoneySection.propiedades, t.s("Propiedades", "Properties"), .asset("properties")),
                         (MoneySection.garage, "Garage", .asset("garage")),
                     ], selection: $section)
