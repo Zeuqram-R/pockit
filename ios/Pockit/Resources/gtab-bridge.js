@@ -170,6 +170,39 @@
       })();
     });
   };
+  // Copia pa' usar sin internet: lugares, categorías, íconos y nombres de zonas, como los decodifica la página.
+  window.pkSnapshot = function () {
+    if (!map || (window.GTAB && window.GTAB.offline)) return null;
+    var cats = {}, icons = {}, labels = [], tile = null;
+    var byId = (window.GTAB && window.GTAB.categoryById) || {};
+    Object.keys(byId).forEach(function (id) {
+      var c = byId[id] || {};
+      cats[id] = { id: id, name: c.name || id, color: c.color || "", icon: c.icon || "", group: c.group || "" };
+      if (c.icon && !/^game-blip/.test(c.icon) && window.GTAB_ICONS && window.GTAB_ICONS[c.icon]) icons[c.icon] = window.GTAB_ICONS[c.icon];
+    });
+    map.eachLayer(function (l) {
+      if (l instanceof L.TileLayer && !tile) {
+        var o = l.options, b = o.bounds ? L.latLngBounds(o.bounds) : null;
+        tile = { url: l._url, tileSize: o.tileSize, zoomOffset: o.zoomOffset, maxNativeZoom: o.maxNativeZoom,
+                 bounds: b ? [[b.getSouth(), b.getWest()], [b.getNorth(), b.getEast()]] : null };
+      }
+      if (!l._icon || !l.getLatLng) return;
+      var cls = l._icon.className || "", txt = (l._icon.textContent || "").trim();
+      if (!txt) return;
+      if (cls.indexOf("gtab-county-label") >= 0) labels.push({ kind: "county", t: txt, lat: l.getLatLng().lat, lng: l.getLatLng().lng });
+      else if (cls.indexOf("gtab-place-label") >= 0) labels.push({ kind: "place", t: txt, lat: l.getLatLng().lat, lng: l.getLatLng().lng });
+    });
+    var tr = map.options.crs.transformation, ib = window.GTAB.islandBounds;
+    return JSON.stringify({
+      savedAt: Date.now(),
+      crs: tr ? [tr._a, tr._b, tr._c, tr._d] : null,
+      island: ib ? [[ib.getSouth(), ib.getWest()], [ib.getNorth(), ib.getEast()]] : null,
+      sea: (window.GTAB_CONFIG && window.GTAB_CONFIG.sea) || "#2F90B0",
+      assetPath: (window.GTAB_CONFIG && window.GTAB_CONFIG.assetPath) || "/images/gta-6/maps/gtab-map/",
+      tile: tile, cats: cats, icons: icons, labels: labels,
+      entries: allEntries().map(function (e) { var d = e.data; return { id: d.id, name: d.name, category: d.category, x: d.x, y: d.y }; })
+    });
+  };
   window.addEventListener("resize", function () { try { map && map.invalidateSize(); } catch (e) {} });
   window.pkFocus = function (lat, lng, zoom) {
     if (!map) return {};

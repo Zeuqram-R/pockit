@@ -67,6 +67,8 @@ final class MapWeb: NSObject, ObservableObject, WKScriptMessageHandler, WKNaviga
     let webView: WKWebView
     @Published var ready = false
     @Published var failed = false
+    /// true cuando está mostrando el mapa guardado (sin internet)
+    @Published var offlineMode = false
     var onLongPress: ((Double, Double, String?, String?) -> Void)?
     var onPinTap: ((UUID) -> Void)?
     var onPlaceTap: ((GamePlace) -> Void)?
@@ -79,6 +81,7 @@ final class MapWeb: NSObject, ObservableObject, WKScriptMessageHandler, WKNaviga
         let cfg = WKWebViewConfiguration()
         cfg.websiteDataStore = .default()
         cfg.applicationNameForUserAgent = "Version/18.0 Mobile/15E148 Safari/604.1"
+        cfg.setURLSchemeHandler(OfflineSchemeHandler(), forURLScheme: "pkoffline")
         WebPerf.unlock120(cfg.preferences)
         let ucc = WKUserContentController()
         if let url = Bundle.main.url(forResource: "gtab-bridge", withExtension: "js"), let js = try? String(contentsOf: url, encoding: .utf8) {
@@ -105,14 +108,20 @@ final class MapWeb: NSObject, ObservableObject, WKScriptMessageHandler, WKNaviga
         webView.load(URLRequest(url: Self.url))
     }
 
-    /// Sin internet: se intenta abrir lo que quedó guardado en el caché de la última vez.
+    /// Sin internet: se abre el mapa guardado en el teléfono (o, si no hay, lo que quedó en caché).
     private var triedCache = false
     private func loadFromCache() {
-        guard !triedCache else { failed = true; return }
+        if !offlineMode, OfflineMap.shared.hasSnapshot, let u = URL(string: "pkoffline://app/offline-map.html") {
+            offlineMode = true
+            ready = false
+            webView.load(URLRequest(url: u))
+            return
+        }
+        guard !triedCache, !offlineMode else { failed = true; return }
         triedCache = true
         webView.load(URLRequest(url: Self.url, cachePolicy: .returnCacheDataDontLoad))
     }
-    func reload() { ready = false; failed = false; triedCache = false; webView.load(URLRequest(url: Self.url)) }
+    func reload() { ready = false; failed = false; triedCache = false; offlineMode = false; webView.load(URLRequest(url: Self.url)) }
 
     func setPins(_ pins: [MapPin]) {
         let arr: [[String: Any]] = pins.map { p in
@@ -185,11 +194,18 @@ final class MapWeb: NSObject, ObservableObject, WKScriptMessageHandler, WKNaviga
         switch type {
         case "ready":
             ready = true
+            failed = false
+            // Con internet: se guarda/renueva la copia de lugares pa' usar sin internet
+            if !offlineMode, !OfflineMap.shared.hasSnapshot || OfflineMap.shared.snapshotIsStale {
+                webView.evaluateJavaScript("window.pkSnapshot && window.pkSnapshot()") { r, _ in
+                    if let json = r as? String { Task { @MainActor in OfflineMap.shared.saveSnapshot(json) } }
+                }
+            }
             webView.evaluateJavaScript("window.pkSetPins && window.pkSetPins(\(pendingPins))")
             webView.evaluateJavaScript("window.pkSetPlaces && window.pkSetPlaces(\(pendingPlaces))")
             webView.evaluateJavaScript("window.pkSetPlaceCats && window.pkSetPlaceCats(\(pendingCats))")
         case "error":
-            failed = true
+            if offlineMode { failed = true } else { loadFromCache() }
         case "longPress":
             let near = d["near"] as? [String: Any]
             UIImpactFeedbackGenerator(style: .medium).impactOccurred()
@@ -251,6 +267,7 @@ struct MapaView: View {
     @State private var filter: PinKind?
     @State private var showList = false
     @State private var showPlaces = false
+    @State private var showOffline = false
     @State private var tappedPlace: GamePlace?
 
     var body: some View {
@@ -296,9 +313,15 @@ struct MapaView: View {
                     Button { showPlaces = true } label: { Image(systemName: "mappin.and.ellipse") }
                         .accessibilityLabel(t.s("Lugares del juego", "Game places"))
                 }
+                ToolbarItem(placement: .primaryAction) {
+                    Button { showOffline = true } label: { Image(systemName: map.offlineMode ? "wifi.slash" : "arrow.down.circle") }
+                        .accessibilityLabel(t.s("Mapa sin internet", "Offline map"))
+                }
             }
             .onAppear {
                 map.start()
+                // si estaba en el mapa guardado, se prueba otra vez con internet
+                if map.offlineMode { map.reload() }
                 map.onLongPress = { lat, lng, place, county in
                     var p = MapPin(x: lng, y: lat, name: "", kind: (filter ?? .pin).rawValue)
                     p.note = ""
@@ -320,6 +343,9 @@ struct MapaView: View {
                 PinSheet(pin: pin, place: editingNear.0, county: editingNear.1) { editing = nil }
                     .environmentObject(settings).environmentObject(store).environmentObject(state).environmentObject(web)
                     .presentationDetents([.medium, .large])
+            }
+            .sheet(isPresented: $showOffline) {
+                OfflineMapSheet().environmentObject(settings).presentationDetents([.medium, .large])
             }
             .sheet(isPresented: $showPlaces) {
                 PlaceSearchSheet { name in showPlaces = false; DispatchQueue.main.asyncAfter(deadline: .now() + 0.4) { map.focusPlace(name) } }

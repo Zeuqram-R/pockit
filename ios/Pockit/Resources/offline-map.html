@@ -1,0 +1,62 @@
+<!doctype html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no">
+<link rel="stylesheet" href="leaflet.css">
+<style>
+  html, body { margin: 0; height: 100%; background: #2F90B0; overflow: hidden; -webkit-touch-callout: none; -webkit-user-select: none; user-select: none; }
+  #gtab-map, .gtab-view { position: absolute; inset: 0; background: #2F90B0; }
+  .gtab-county-label, .gtab-place-label { width: auto !important; height: auto !important; white-space: nowrap; color: #fff; text-transform: uppercase;
+    text-shadow: 0 1px 3px rgba(0,0,0,.65), 0 0 2px rgba(0,0,0,.5); pointer-events: none; transform-origin: center; }
+  .gtab-county-label span { display: block; transform: translate(-50%, -50%); font: 700 15px/1.1 -apple-system, sans-serif; letter-spacing: .08em; }
+  .gtab-place-label span { display: block; transform: translate(-50%, -50%); font: 600 10.5px/1.1 -apple-system, sans-serif; letter-spacing: .05em; opacity: .92; }
+  .leaflet-container { background: #2F90B0; }
+</style>
+</head>
+<body>
+<div id="gtab-map" class="gtab-root"><div class="gtab-view"></div></div>
+<script src="leaflet.js"></script>
+<script>
+// Pockit · mapa guardado para usar sin internet. Todo sale del teléfono (pkoffline://).
+(function () {
+  function esc(s) { return String(s).replace(/[&<>"']/g, function (c) { return { "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]; }); }
+  fetch("pkoffline://data/snapshot.json").then(function (r) { return r.json(); }).then(function (S) {
+    var t = S.crs || [0.03125, 512, -0.03125, 512];
+    var crs = L.extend({}, L.CRS.Simple, { transformation: new L.Transformation(t[0], t[1], t[2], t[3]) });
+    var map = L.map(document.querySelector(".gtab-view"), {
+      crs: crs, minZoom: -1, maxZoom: 6, zoomSnap: 1, zoomControl: false, attributionControl: false
+    });
+    if (S.sea) { document.body.style.background = S.sea; document.querySelector(".gtab-view").style.background = S.sea; }
+    var tl = S.tile || {};
+    L.tileLayer("pkoffline://tiles/{z}/{z},{y},{x}.jpg", {
+      tileSize: tl.tileSize || 128, zoomOffset: tl.zoomOffset == null ? 1 : tl.zoomOffset,
+      minZoom: -1, maxZoom: 18, minNativeZoom: -1, maxNativeZoom: tl.maxNativeZoom || 5, keepBuffer: 4,
+      bounds: tl.bounds ? L.latLngBounds(tl.bounds) : undefined,
+      errorTileUrl: "data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///yH5BAEAAAAALAAAAAABAAEAAAIBRAA7"
+    }).addTo(map);
+    map.createPane("pklabels").style.zIndex = 640;
+    (S.labels || []).forEach(function (l) {
+      L.marker([l.lat, l.lng], { pane: "pklabels", interactive: false, keyboard: false,
+        icon: L.divIcon({ className: l.kind === "county" ? "gtab-county-label" : "gtab-place-label", html: "<span>" + esc(l.t) + "</span>", iconSize: null })
+      }).addTo(map);
+    });
+    var island = S.island ? L.latLngBounds(S.island) : map.getBounds();
+    map.fitBounds(island);
+    window.GTAB_CONFIG = { assetPath: "pkoffline://", sea: S.sea };
+    window.GTAB_ICONS = S.icons || {};
+    window.GTAB = {
+      map: map,
+      entries: (S.entries || []).map(function (e) { return { data: e }; }),
+      categoryById: S.cats || {},
+      worldToLatLng: function (x, y) { return L.latLng(y, x); },
+      islandBounds: island,
+      offline: true
+    };
+  }).catch(function () {
+    try { window.webkit.messageHandlers.pockitMap.postMessage({ type: "error", reason: "no-offline-data" }); } catch (e) {}
+  });
+})();
+</script>
+</body>
+</html>
