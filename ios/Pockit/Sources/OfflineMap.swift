@@ -80,13 +80,18 @@ final class OfflineMap: ObservableObject {
     func saveSnapshot(_ json: String) {
         guard let d = json.data(using: .utf8), d.count > 1000 else { return }
         try? d.write(to: snapshotURL, options: .atomic)
+        UserDefaults.standard.set(2, forKey: "pockit.offline.snapV")
         cachedSnap = nil
         hasSnapshot = true
         snapshotDate = Date()
         Task { await downloadIcons() }
     }
 
-    var snapshotIsStale: Bool { (snapshotDate ?? .distantPast).timeIntervalSinceNow < -12 * 3600 }
+    /// v2 trae el tipo de cada nombre de zona (pa' mostrarlos según el zoom)
+    var snapshotIsStale: Bool {
+        (snapshotDate ?? .distantPast).timeIntervalSinceNow < -12 * 3600 ||
+        UserDefaults.standard.integer(forKey: "pockit.offline.snapV") < 2
+    }
 
     private struct Snap: Decodable {
         struct Cat: Decodable { let icon: String? }

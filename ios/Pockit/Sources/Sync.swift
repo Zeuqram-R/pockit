@@ -1,6 +1,7 @@
 import Foundation
 import Security
 import UIKit
+import Network
 
 /// Guarda el token de GitHub solo en el Keychain del dispositivo (nunca en el código ni en el repo).
 enum Keychain {
@@ -55,9 +56,24 @@ final class SyncManager: ObservableObject {
         set { UserDefaults.standard.set(newValue, forKey: lastKey) }
     }
 
+    /// Lo que cambiaste sin internet queda guardado en el teléfono; cuando vuelve la conexión se sube solo.
+    private let net = NWPathMonitor()
+    private var netOn = false
+
     func attach(store: PockitStore, state: PockitState) {
         self.store = store
         self.state = state
+        if !netOn {
+            netOn = true
+            net.pathUpdateHandler = { [weak self] p in
+                guard p.status == .satisfied else { return }
+                Task { @MainActor in
+                    try? await Task.sleep(for: .seconds(2))
+                    await self?.sync()
+                }
+            }
+            net.start(queue: DispatchQueue(label: "pockit.sync.net"))
+        }
         store.onLocalChange = { [weak self] in self?.schedulePush() }
         status = hasToken ? .idle : .off
     }

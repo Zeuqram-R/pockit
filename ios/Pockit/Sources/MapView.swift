@@ -268,6 +268,7 @@ struct MapaView: View {
     @State private var showList = false
     @State private var showPlaces = false
     @State private var showOffline = false
+    @State private var showHint = false
     @State private var tappedPlace: GamePlace?
 
     var body: some View {
@@ -294,14 +295,24 @@ struct MapaView: View {
             }
             .overlay(alignment: .top) { if map.ready { filterBar(t) } }
             .overlay(alignment: .bottom) {
-                if map.ready && store.data.pins.filter({ $0.space == "gtab" }).isEmpty {
+                if map.ready && showHint {
                     Text(t.s("Mantené presionado en el mapa pa' poner un pin", "Long-press the map to drop a pin"))
                         .font(Theme.text(13, .medium)).foregroundStyle(.white)
                         .padding(.horizontal, 14).padding(.vertical, 8)
                         .background(Capsule().fill(.ultraThinMaterial))
                         .padding(.bottom, 100)
+                        .transition(.opacity)
                 }
             }
+            .animation(.easeOut(duration: 0.8), value: showHint)
+            .task(id: map.ready) {
+                // el aviso sale solo 6 segundos al entrar al mapa
+                guard map.ready else { return }
+                showHint = true
+                try? await Task.sleep(for: .seconds(6))
+                showHint = false
+            }
+            .onDisappear { showHint = false }
             .navigationTitle(t.s("MAPA", "MAP"))
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {

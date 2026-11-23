@@ -190,10 +190,14 @@
       var cls = l._icon.className || "", txt = (l._icon.textContent || "").trim();
       if (!txt) return;
       if (cls.indexOf("gtab-county-label") >= 0) labels.push({ kind: "county", t: txt, lat: l.getLatLng().lat, lng: l.getLatLng().lng });
-      else if (cls.indexOf("gtab-place-label") >= 0) labels.push({ kind: "place", t: txt, lat: l.getLatLng().lat, lng: l.getLatLng().lng });
+      else if (cls.indexOf("gtab-place-label") >= 0) {
+        var sub = (cls.match(/gtab-place-(region|city|town|district)/) || [])[1] || "town";
+        labels.push({ kind: "place", sub: sub, t: txt, lat: l.getLatLng().lat, lng: l.getLatLng().lng });
+      }
     });
     var tr = map.options.crs.transformation, ib = window.GTAB.islandBounds;
     return JSON.stringify({
+      v: 2,
       savedAt: Date.now(),
       crs: tr ? [tr._a, tr._b, tr._c, tr._d] : null,
       island: ib ? [[ib.getSouth(), ib.getWest()], [ib.getNorth(), ib.getEast()]] : null,

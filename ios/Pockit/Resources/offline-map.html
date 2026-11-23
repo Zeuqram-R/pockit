@@ -7,10 +7,28 @@
 <style>
   html, body { margin: 0; height: 100%; background: #2F90B0; overflow: hidden; -webkit-touch-callout: none; -webkit-user-select: none; user-select: none; }
   #gtab-map, .gtab-view { position: absolute; inset: 0; background: #2F90B0; }
-  .gtab-county-label, .gtab-place-label { width: auto !important; height: auto !important; white-space: nowrap; color: #fff; text-transform: uppercase;
-    text-shadow: 0 1px 3px rgba(0,0,0,.65), 0 0 2px rgba(0,0,0,.5); pointer-events: none; transform-origin: center; }
-  .gtab-county-label span { display: block; transform: translate(-50%, -50%); font: 700 15px/1.1 -apple-system, sans-serif; letter-spacing: .08em; }
-  .gtab-place-label span { display: block; transform: translate(-50%, -50%); font: 600 10.5px/1.1 -apple-system, sans-serif; letter-spacing: .05em; opacity: .92; }
+  /* Nombres según el zoom, igual que en GTABase: lejos solo condados; después ciudades y regiones; luego pueblos; de cerca, barrios */
+  .gtab-county-label, .gtab-place-label { width: 0 !important; height: 0 !important; margin: 0 !important; background: none; border: 0; pointer-events: none; }
+  .gtab-county-label span, .gtab-place-label span { position: absolute; left: 0; top: 0; transform: translate(-50%, -50%); white-space: nowrap; color: #fff;
+    text-transform: uppercase; font-family: "Arial Narrow", "Helvetica Neue", Arial, sans-serif; line-height: 1; }
+  .gtab-county-label span { font-weight: 600; font-size: 14px; letter-spacing: .04em;
+    text-shadow: 0 0 1px #15112B, 0 0 2px rgba(21,17,43,.9), 0 1px 4px rgba(21,17,43,.55); }
+  .gtab-place-label span { font-weight: 600; font-size: 13px; letter-spacing: .05em; text-shadow: 0 0 2px rgba(21,17,43,.9), 0 1px 3px rgba(21,17,43,.8); }
+  .gtab-place-region span { color: #F4F1E8; font-weight: 500; letter-spacing: .12em; }
+  .gtab-place-city span { font-weight: 700; }
+  .gtab-place-district span { font-weight: 500; color: #F4F1E8; letter-spacing: .06em; }
+  .pkl[data-z="-1"] .gtab-place-label, .pkl[data-z="0"] .gtab-place-town, .pkl[data-z="1"] .gtab-place-town { display: none; }
+  .pkl:not([data-z="4"]):not([data-z="5"]):not([data-z="6"]) .gtab-place-district { display: none; }
+  .pkl[data-z="-1"] .gtab-county-label span { font-size: 12px; } .pkl[data-z="0"] .gtab-county-label span { font-size: 13px; }
+  .pkl[data-z="1"] .gtab-county-label span { font-size: 15px; } .pkl[data-z="2"] .gtab-county-label span { font-size: 18px; }
+  .pkl[data-z="3"] .gtab-county-label span { font-size: 22px; } .pkl[data-z="4"] .gtab-county-label span { font-size: 26px; }
+  .pkl[data-z="5"] .gtab-county-label span, .pkl[data-z="6"] .gtab-county-label span { font-size: 30px; }
+  .pkl[data-z="0"] .gtab-place-label span { font-size: 9px; } .pkl[data-z="1"] .gtab-place-label span, .pkl[data-z="2"] .gtab-place-label span { font-size: 10px; }
+  .pkl[data-z="2"] .gtab-place-region span, .pkl[data-z="2"] .gtab-place-city span { font-size: 12px; }
+  .pkl[data-z="3"] .gtab-place-label span { font-size: 12px; } .pkl[data-z="3"] .gtab-place-region span, .pkl[data-z="3"] .gtab-place-city span { font-size: 14px; }
+  .pkl[data-z="4"] .gtab-place-label span { font-size: 15px; } .pkl[data-z="4"] .gtab-place-region span, .pkl[data-z="4"] .gtab-place-city span { font-size: 18px; }
+  .pkl[data-z="5"] .gtab-place-label span { font-size: 18px; } .pkl[data-z="5"] .gtab-place-region span, .pkl[data-z="5"] .gtab-place-city span { font-size: 24px; }
+  .pkl[data-z="6"] .gtab-place-label span { font-size: 22px; } .pkl[data-z="6"] .gtab-place-region span, .pkl[data-z="6"] .gtab-place-city span { font-size: 30px; }
   .leaflet-container { background: #2F90B0; }
 </style>
 </head>
@@ -35,14 +53,20 @@
       bounds: tl.bounds ? L.latLngBounds(tl.bounds) : undefined,
       errorTileUrl: "data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///yH5BAEAAAAALAAAAAABAAEAAAIBRAA7"
     }).addTo(map);
-    map.createPane("pklabels").style.zIndex = 640;
+    var pane = map.createPane("pklabels");
+    pane.style.zIndex = 640;
+    pane.classList.add("pkl");
+    var setZ = function () { pane.setAttribute("data-z", String(Math.round(map.getZoom()))); };
+    map.on("zoomend", setZ);
     (S.labels || []).forEach(function (l) {
+      var cls = l.kind === "county" ? "gtab-county-label" : "gtab-place-label gtab-place-" + (l.sub || "town");
       L.marker([l.lat, l.lng], { pane: "pklabels", interactive: false, keyboard: false,
-        icon: L.divIcon({ className: l.kind === "county" ? "gtab-county-label" : "gtab-place-label", html: "<span>" + esc(l.t) + "</span>", iconSize: null })
+        icon: L.divIcon({ className: cls, html: "<span>" + esc(l.t) + "</span>", iconSize: null })
       }).addTo(map);
     });
     var island = S.island ? L.latLngBounds(S.island) : map.getBounds();
     map.fitBounds(island);
+    setZ();
     window.GTAB_CONFIG = { assetPath: "pkoffline://", sea: S.sea };
     window.GTAB_ICONS = S.icons || {};
     window.GTAB = {

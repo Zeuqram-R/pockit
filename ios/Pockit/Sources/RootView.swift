@@ -388,16 +388,9 @@ struct OfflineChatCard: View {
         VStack(spacing: 16) {
             Image(systemName: "wifi.slash").font(.system(size: 40, weight: .semibold)).foregroundStyle(Theme.lilac)
             Text(t.s("SIN INTERNET", "OFFLINE")).font(Theme.display(28)).foregroundStyle(.white)
-            Text(t.s("Marisol necesita conexión pa' responder. Mientras tanto, el mapa (con lo que descargaste), tus pendientes, la libreta y el tracker funcionan normal.",
+            Text(t.s("Marisol necesita conexión pa' responder. Mientras tanto, el mapa (con lo que descargaste), tus pendientes, la libreta y el tracker funcionan normal desde las pestañas de abajo.",
                      "Marisol needs a connection to reply. Meanwhile the map (with what you downloaded), your to-dos, notebook and tracker work as usual."))
                 .font(Theme.text(15)).foregroundStyle(Theme.lilac).multilineTextAlignment(.center).padding(.horizontal, 28)
-            Button { state.tab = .mapa } label: {
-                Label(t.s("Abrir el mapa", "Open the map"), systemImage: "map.fill")
-                    .font(Theme.text(16, .semibold)).foregroundStyle(Theme.nightDeep)
-                    .padding(.horizontal, 22).frame(height: 46)
-                    .background(Capsule().fill(Theme.switchPink))
-            }
-            .buttonStyle(.plain)
             Button(t.retry) { web.loadHome() }.font(Theme.text(15, .semibold)).foregroundStyle(.white)
             Text(t.s("Se conecta solo cuando vuelva el internet.", "Reconnects on its own when you're back online."))
                 .font(Theme.text(12)).foregroundStyle(Theme.lilac.opacity(0.7))
