@@ -36,6 +36,7 @@ struct RootView: View {
                         TopBar(onSettings: { showSettings = true }, onAvatar: { showPartida = true }, onChats: { showChats = true })
                         QuickBar()
                         ChatColumn(webView: web.webView)
+                            .overlay { if web.loadError && !web.hasLoadedOnce { OfflineChatCard() } }
                             // El historial sigue detrás del teclado (como en iMessage); chat.js sube la caja.
                             .ignoresSafeArea(.keyboard, edges: .bottom)
                             // Conversación nueva: vista nativa encima de la página del proyecto.
@@ -131,6 +132,7 @@ struct RootView: View {
         .onAppear {
             state.onEvent = { tag in store.ingest(tag) }
             SyncManager.shared.attach(store: store, state: state)
+            web.watchNetwork()
             // El mapa se va cargando por detrás unos segundos después de abrir, pa' que la pestaña abra de una.
             DispatchQueue.main.asyncAfter(deadline: .now() + 6) { MapWeb.shared.start() }
             WidgetBridge.update(store: store, state: state, lang: settings.language)
@@ -166,7 +168,9 @@ struct RootView: View {
         .task {
             // Mínimo de 1.2 s pa' que la pantalla de carga no parpadee.
             try? await Task.sleep(for: .seconds(1.2))
-            while !web.hasLoadedOnce { try? await Task.sleep(for: .milliseconds(150)) }
+            // 0.6.1: sin internet ya no se queda trabada en la pantalla de carga: se abre la app igual
+            // (mapa, tracker, pendientes funcionan) y el chat muestra el aviso.
+            while !web.hasLoadedOnce && !web.loadError { try? await Task.sleep(for: .milliseconds(150)) }
             withAnimation(.easeOut(duration: 0.5)) { showLoading = false }
         }
     }
@@ -371,4 +375,34 @@ struct WebContainer: UIViewRepresentable {
     let webView: WKWebView
     func makeUIView(context: Context) -> WKWebView { webView }
     func updateUIView(_ uiView: WKWebView, context: Context) {}
+}
+
+
+/// Chat sin internet: aviso + atajos a lo que sí funciona.
+struct OfflineChatCard: View {
+    @EnvironmentObject private var settings: AppSettings
+    @EnvironmentObject private var web: WebModel
+    @EnvironmentObject private var state: PockitState
+    var body: some View {
+        let t = settings.t
+        VStack(spacing: 16) {
+            Image(systemName: "wifi.slash").font(.system(size: 40, weight: .semibold)).foregroundStyle(Theme.lilac)
+            Text(t.s("SIN INTERNET", "OFFLINE")).font(Theme.display(28)).foregroundStyle(.white)
+            Text(t.s("Marisol necesita conexión pa' responder. Mientras tanto, el mapa (con lo que descargaste), tus pendientes, la libreta y el tracker funcionan normal.",
+                     "Marisol needs a connection to reply. Meanwhile the map (with what you downloaded), your to-dos, notebook and tracker work as usual."))
+                .font(Theme.text(15)).foregroundStyle(Theme.lilac).multilineTextAlignment(.center).padding(.horizontal, 28)
+            Button { state.tab = .mapa } label: {
+                Label(t.s("Abrir el mapa", "Open the map"), systemImage: "map.fill")
+                    .font(Theme.text(16, .semibold)).foregroundStyle(Theme.nightDeep)
+                    .padding(.horizontal, 22).frame(height: 46)
+                    .background(Capsule().fill(Theme.switchPink))
+            }
+            .buttonStyle(.plain)
+            Button(t.retry) { web.loadHome() }.font(Theme.text(15, .semibold)).foregroundStyle(.white)
+            Text(t.s("Se conecta solo cuando vuelva el internet.", "Reconnects on its own when you're back online."))
+                .font(Theme.text(12)).foregroundStyle(Theme.lilac.opacity(0.7))
+        }
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
+        .background(Theme.night)
+    }
 }

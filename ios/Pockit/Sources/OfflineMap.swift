@@ -40,6 +40,8 @@ final class OfflineMap: ObservableObject {
     @Published var bytesOnDisk: Int64 = 0
     @Published var savedLevel: Int? = UserDefaults.standard.object(forKey: "pockit.offline.level") as? Int
     @Published var lastError: String?
+    /// Nivel que terminó de bajarse completo (sin cortes).
+    @Published var completedLevel: Int? = UserDefaults.standard.object(forKey: "pockit.offline.completed") as? Int
     private var task: Task<Void, Never>?
 
     let root: URL
@@ -54,6 +56,11 @@ final class OfflineMap: ObservableObject {
         var rv = URLResourceValues(); rv.isExcludedFromBackup = true
         try? r.setResourceValues(rv)
         refreshInfo()
+        // 0.6.1: las descargas hechas con la 0.6.0 no quedaban marcadas como completas
+        if completedLevel == nil, let lv = savedLevel, tilesOnDisk > plan(upTo: lv).count / 2 {
+            completedLevel = lv
+            UserDefaults.standard.set(lv, forKey: "pockit.offline.completed")
+        }
     }
 
     func refreshInfo() {
@@ -169,7 +176,12 @@ final class OfflineMap: ObservableObject {
                     }
                 }
             }
+            let finished = !Task.isCancelled && self.done >= self.total
             self.downloading = false
+            if finished {
+                self.completedLevel = max(level, self.completedLevel ?? -99)
+                UserDefaults.standard.set(self.completedLevel, forKey: "pockit.offline.completed")
+            }
             self.refreshInfo()
         }
     }
@@ -192,7 +204,9 @@ final class OfflineMap: ObservableObject {
         cancel()
         try? FileManager.default.removeItem(at: tilesDir)
         savedLevel = nil
+        completedLevel = nil
         UserDefaults.standard.removeObject(forKey: "pockit.offline.level")
+        UserDefaults.standard.removeObject(forKey: "pockit.offline.completed")
         refreshInfo()
     }
 }
@@ -253,7 +267,9 @@ struct OfflineMapSheet: View {
                         off.hasSnapshot ? t.s("Guardados ✓", "Saved ✓") : t.s("Abrí el mapa con internet", "Open the map online"))
                     row(t.s("Imágenes del mapa", "Map images"),
                         off.tilesOnDisk > 0 ? "\(off.tilesOnDisk) · \(ByteCountFormatter.string(fromByteCount: off.bytesOnDisk, countStyle: .file))" : t.s("Ninguna", "None"))
-                    if let lv = off.savedLevel, let l = OfflineMap.Level(rawValue: lv) { row(t.s("Nivel", "Level"), l.title(t)) }
+                    if let lv = off.completedLevel ?? off.savedLevel, let l = OfflineMap.Level(rawValue: lv) {
+                        row(t.s("Nivel", "Level"), l.title(t) + (off.completedLevel != nil ? " ✓" : t.s(" (a medias)", " (partial)")))
+                    }
                 } header: { SectionTitle(text: t.s("EN ESTE TELÉFONO", "ON THIS PHONE")) }
                 footer: {
                     Text(t.s("Tus pines y lugares desbloqueados siempre funcionan sin internet. Si no hay conexión, el mapa abre solo con lo guardado aquí.",
@@ -274,9 +290,13 @@ struct OfflineMapSheet: View {
                         ProgressView(value: Double(off.done), total: Double(max(off.total, 1))).tint(Theme.switchPink)
                         Text("\(off.done) / \(off.total)").font(Theme.text(13)).foregroundStyle(.white)
                         Button(t.s("Pausar", "Pause"), role: .destructive) { off.cancel() }
+                    } else if let c = off.completedLevel, c >= level.rawValue {
+                        Label(t.s("Listo: este nivel ya está completo en tu teléfono", "Done: this level is fully saved on your phone"), systemImage: "checkmark.circle.fill")
+                            .foregroundStyle(Theme.teal)
                     } else {
                         Button { off.download(level: level.rawValue) } label: {
-                            Label(off.tilesOnDisk > 0 ? t.s("Descargar / completar", "Download / resume") : t.s("Descargar mapa", "Download map"), systemImage: "arrow.down.circle.fill")
+                            Label(off.tilesOnDisk > 0 && (off.savedLevel ?? -99) >= level.rawValue ? t.s("Terminar descarga (quedó a medias)", "Finish download (was interrupted)")
+                                  : t.s("Descargar mapa", "Download map"), systemImage: "arrow.down.circle.fill")
                         }
                         .disabled(!off.hasSnapshot)
                     }
@@ -302,7 +322,7 @@ struct OfflineMapSheet: View {
             .navigationBarTitleDisplayMode(.inline)
             .onAppear {
                 off.refreshInfo()
-                if let lv = off.savedLevel, let l = OfflineMap.Level(rawValue: lv) { level = l }
+                if let lv = off.completedLevel ?? off.savedLevel, let l = OfflineMap.Level(rawValue: lv) { level = l }
             }
         }
     }

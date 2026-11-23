@@ -314,7 +314,7 @@ struct MapaView: View {
                         .accessibilityLabel(t.s("Lugares del juego", "Game places"))
                 }
                 ToolbarItem(placement: .primaryAction) {
-                    Button { showOffline = true } label: { Image(systemName: map.offlineMode ? "wifi.slash" : "arrow.down.circle") }
+                    Button { showOffline = true } label: { Image(systemName: map.offlineMode ? "wifi.slash" : (OfflineMap.shared.completedLevel != nil ? "checkmark.icloud" : "arrow.down.circle")) }
                         .accessibilityLabel(t.s("Mapa sin internet", "Offline map"))
                 }
             }

@@ -1,5 +1,6 @@
 import SwiftUI
 import WebKit
+import Network
 import ObjectiveC
 
 /// Dueño del WKWebView: lo crea una sola vez, sigue el progreso de carga y decide qué links se abren adentro.
@@ -13,6 +14,21 @@ final class WebModel: NSObject, ObservableObject {
     @Published var progress: Double = 0
     @Published var hasLoadedOnce = false
     @Published var loadError = false
+    /// Cuando vuelve el internet, se reintenta solo.
+    private let netMonitor = NWPathMonitor()
+    private var netStarted = false
+    func watchNetwork() {
+        guard !netStarted else { return }
+        netStarted = true
+        netMonitor.pathUpdateHandler = { [weak self] path in
+            guard path.status == .satisfied else { return }
+            Task { @MainActor in
+                guard let self, self.loadError, !self.hasLoadedOnce else { return }
+                self.loadHome()
+            }
+        }
+        netMonitor.start(queue: DispatchQueue(label: "pockit.net"))
+    }
     /// Aviso corto cuando un botón rápido no pudo enviar.
     @Published var sendProblem: String?
     /// Ruta abierta en claude.ai (pa' marcar la conversación actual en el panel).
