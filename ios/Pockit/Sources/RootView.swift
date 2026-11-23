@@ -24,10 +24,18 @@ struct RootView: View {
             VStack(spacing: 0) {
                 ZStack {
                     // El chat siempre vivo (la WebView no se recarga al cambiar de pestaña).
+                    GeometryReader { geo in
+                    let wide = UIDevice.current.userInterfaceIdiom != .phone && geo.size.width >= 900
+                    HStack(spacing: 0) {
+                    if wide {
+                        TrackerSidebar()
+                            .frame(width: 330)
+                        Rectangle().fill(Theme.line).frame(width: 1).ignoresSafeArea(edges: .bottom)
+                    }
                     VStack(spacing: 0) {
                         TopBar(onSettings: { showSettings = true }, onAvatar: { showPartida = true }, onChats: { showChats = true })
                         QuickBar()
-                        WebContainer(webView: web.webView)
+                        ChatColumn(webView: web.webView)
                             // El historial sigue detrás del teclado (como en iMessage); chat.js sube la caja.
                             .ignoresSafeArea(.keyboard, edges: .bottom)
                             // Conversación nueva: vista nativa encima de la página del proyecto.
@@ -43,6 +51,8 @@ struct RootView: View {
                                         if v.translation.width > 40 { showChats = true }
                                     })
                             }
+                    }
+                    }
                     }
                     .opacity(state.tab == .marisol ? 1 : 0)
                     .allowsHitTesting(state.tab == .marisol)
@@ -322,6 +332,24 @@ struct SendProblemBanner: View {
             onClose()
         }
         .accessibilityHint(reason)
+    }
+}
+
+/// El chat con ancho y zoom pa' que claude.ai siempre use su diseño de teléfono (ver WebModel.setZoom).
+struct ChatColumn: View {
+    let webView: WKWebView
+    @EnvironmentObject private var web: WebModel
+    var body: some View {
+        GeometryReader { g in
+            let isPhone = UIDevice.current.userInterfaceIdiom == .phone
+            let zoom: CGFloat = isPhone ? 1 : min(1.3, max(1, g.size.width / 640))
+            let width = min(g.size.width, 720 * zoom)
+            WebContainer(webView: webView)
+                .frame(width: width, height: g.size.height)
+                .frame(maxWidth: .infinity)
+                .onAppear { web.setZoom(zoom) }
+                .onChange(of: zoom) { _, z in web.setZoom(z) }
+        }
     }
 }
 

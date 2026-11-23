@@ -417,7 +417,17 @@ extension WebModel {
         keyboardUp = height > 0
         keyboardLockUntil = Date().addingTimeInterval(max(duration, 0.25) + 0.8)
         if keyboardUp { webView.scrollView.setContentOffset(.zero, animated: false) }
-        webView.evaluateJavaScript("window.pockitKeyboard && window.pockitKeyboard(\(Int(height)), \(duration))", completionHandler: nil)
+        // Con zoom (iPad) la página mide en píxeles CSS, no en puntos.
+        let css = height / max(webView.pageZoom, 0.1)
+        webView.evaluateJavaScript("window.pockitKeyboard && window.pockitKeyboard(\(Int(css)), \(duration))", completionHandler: nil)
+    }
+
+    /// iPad / Mac / iPhone acostado: claude.ai cambia a su diseño de computadora (con su barra lateral) cuando la
+    /// página mide 768 px o más. Se agranda la página con zoom y se limita el ancho pa' que siempre vea el diseño
+    /// de teléfono, que es el que tiene nuestro skin.
+    func setZoom(_ z: CGFloat) {
+        guard abs(webView.pageZoom - z) > 0.01 else { return }
+        webView.pageZoom = z
     }
 }
 
