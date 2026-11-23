@@ -10,55 +10,123 @@ struct AvatarView: View {
     var spoilerDot = false
     var typing = false
 
-    @StateObject private var player = AvatarPlayer()
+    @StateObject private var face = FacePlayer()
     @State private var breathe = false
 
-    /// Encuadre dentro del cuadro 9:16: centro de la cabeza y cuánto se agranda.
-    static let faceCenterY: CGFloat = 0.38
-    static let zoom: CGFloat = 1.0
-
     var body: some View {
-        let videoW = size * Self.zoom
-        let videoH = videoW * 16 / 9
-        let offsetY = videoH * (0.5 - Self.faceCenterY)
+        // 0.7.0: solo su cara (recortada, sin círculo ni atardecer), como el botón de su pestaña.
+        Image(uiImage: face.frame)
+            .resizable()
+            .interpolation(.high)
+            .scaledToFit()
+            .frame(width: size * 1.2, height: size * 1.2)
+            .shadow(color: .black.opacity(0.35), radius: 6, y: 3)
+            .scaleEffect(breathe ? 1.02 : 1.0)
+            .frame(width: size, height: size)
+            .overlay(alignment: .bottomTrailing) {
+                if spoilerDot {
+                    Circle().fill(Theme.sunset)
+                        .frame(width: size * 0.26, height: size * 0.26)
+                        .overlay(Circle().stroke(Theme.night, lineWidth: 2))
+                }
+            }
+            .overlay(alignment: .bottomTrailing) {
+                if typing {
+                    TypingBadge()
+                        .offset(x: 30, y: 4)
+                        .transition(.scale(scale: 0.4, anchor: .topLeading).combined(with: .opacity))
+                }
+            }
+            .animation(.spring(response: 0.4, dampingFraction: 0.7), value: typing)
+            .onAppear {
+                face.show(mood, animated: false)
+                withAnimation(.easeInOut(duration: 2.8).repeatForever(autoreverses: true)) { breathe = true }
+            }
+            .onChange(of: mood) { _, newMood in face.show(newMood, animated: true) }
+            .accessibilityLabel("Marisol, \(mood.rawValue)")
+    }
+}
 
-        ZStack {
-            Image(uiImage: AvatarPlayer.still(player.stillMood))
-                .resizable()
-                .frame(width: videoW, height: videoH)
-            PlayerLayerView(player: player.playerA)
-                .frame(width: videoW, height: videoH)
-                .opacity(player.opacityA)
-            PlayerLayerView(player: player.playerB)
-                .frame(width: videoW, height: videoH)
-                .opacity(player.opacityB)
+/// Reproduce las animaciones de la cara ya recortada (cuadritos guardados en una hoja, sin fondo).
+/// Igual que antes: de la cara actual pasa a neutral y de neutral a la nueva.
+@MainActor
+final class FacePlayer: NSObject, ObservableObject {
+    @Published private(set) var frame: UIImage = FacePlayer.still(.neutral)
+    private var current: Mood = .neutral
+    private var pending: Mood?
+    private var busy = false
+    private var link: CADisplayLink?
+    private var frames: [UIImage] = []
+    private var start: CFTimeInterval = 0
+    /// cuadros por segundo (los clips se recortaron a 10 fps; 1.25x más rápido como antes)
+    private let fps: Double = 10 * 1.25
+
+    private struct Meta: Decodable, Sendable { let cols: Int; let size: Int; let clips: [String: Int] }
+    nonisolated private static let meta: Meta? = {
+        guard let u = Bundle.main.url(forResource: "cutclips", withExtension: "json"), let d = try? Data(contentsOf: u) else { return nil }
+        return try? JSONDecoder().decode(Meta.self, from: d)
+    }()
+    private static var stillCache: [Mood: UIImage] = [:]
+
+    static func still(_ mood: Mood) -> UIImage {
+        if let c = stillCache[mood] { return c }
+        let img = Bundle.main.url(forResource: "Cut_\(mood.rawValue)", withExtension: "png").flatMap { UIImage(contentsOfFile: $0.path) }
+            ?? AvatarPlayer.still(mood)
+        stillCache[mood] = img
+        return img
+    }
+
+    nonisolated private static func clipFrames(_ from: Mood, _ to: Mood) -> [UIImage] {
+        let name = "Marisol_\(from.rawValue)_a_\(to.rawValue)"
+        guard let m = meta, let n = m.clips[name],
+              let u = Bundle.main.url(forResource: "CutClip_\(name)", withExtension: "webp"),
+              let sheet = UIImage(contentsOfFile: u.path)?.cgImage else { return [] }
+        var out: [UIImage] = []
+        for i in 0..<n {
+            let r = CGRect(x: (i % m.cols) * m.size, y: (i / m.cols) * m.size, width: m.size, height: m.size)
+            if let c = sheet.cropping(to: r) { out.append(UIImage(cgImage: c)) }
         }
-        .offset(y: offsetY)
-        .frame(width: size, height: size)
-        .clipShape(Circle())
-        .overlay(Circle().stroke(Theme.hot, lineWidth: 2))
-        .scaleEffect(breathe ? 1.02 : 1.0)
-        .overlay(alignment: .bottomTrailing) {
-            if spoilerDot {
-                Circle().fill(Theme.sunset)
-                    .frame(width: size * 0.26, height: size * 0.26)
-                    .overlay(Circle().stroke(Theme.night, lineWidth: 2))
-            }
+        return out
+    }
+
+    func show(_ mood: Mood, animated: Bool) {
+        guard animated else { current = mood; frame = Self.still(mood); return }
+        if busy { pending = mood; return }
+        guard mood != current else { return }
+        busy = true
+        let from = current, to = mood
+        Task.detached(priority: .userInitiated) {
+            var seq: [UIImage] = []
+            if from != .neutral { seq += Self.clipFrames(from, .neutral) }
+            if to != .neutral { seq += Self.clipFrames(.neutral, to) }
+            await MainActor.run { self.play(seq, ending: to) }
         }
-        .overlay(alignment: .bottomTrailing) {
-            if typing {
-                TypingBadge()
-                    .offset(x: 30, y: 4)
-                    .transition(.scale(scale: 0.4, anchor: .topLeading).combined(with: .opacity))
-            }
-        }
-        .animation(.spring(response: 0.4, dampingFraction: 0.7), value: typing)
-        .onAppear {
-            player.show(mood, animated: false)
-            withAnimation(.easeInOut(duration: 2.8).repeatForever(autoreverses: true)) { breathe = true }
-        }
-        .onChange(of: mood) { _, newMood in player.show(newMood, animated: true) }
-        .accessibilityLabel("Marisol, \(mood.rawValue)")
+    }
+
+    private func play(_ seq: [UIImage], ending: Mood) {
+        guard !seq.isEmpty else { finish(ending); return }
+        frames = seq
+        start = CACurrentMediaTime()
+        target = ending
+        let l = CADisplayLink(target: self, selector: #selector(tick))
+        l.preferredFrameRateRange = CAFrameRateRange(minimum: 15, maximum: 30, preferred: 24)
+        l.add(to: .main, forMode: .common)
+        link = l
+    }
+    private var target: Mood = .neutral
+
+    @objc private func tick() {
+        let i = Int((CACurrentMediaTime() - start) * fps)
+        if i >= frames.count { link?.invalidate(); link = nil; finish(target); return }
+        frame = frames[i]
+    }
+
+    private func finish(_ mood: Mood) {
+        current = mood
+        frame = Self.still(mood)
+        frames = []
+        busy = false
+        if let next = pending { pending = nil; show(next, animated: true) }
     }
 }
 
