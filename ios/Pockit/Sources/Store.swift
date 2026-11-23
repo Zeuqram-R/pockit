@@ -267,6 +267,14 @@ final class PockitStore: ObservableObject {
     init() {
         if let raw = try? Data(contentsOf: url), let decoded = try? Self.decoder.decode(PockitData.self, from: raw) {
             data = decoded
+            // 0.5.4: limpia repetidos que dejó la primera sincronización (ej. cuentas de BUCKME dobles)
+            let clean = decoded.deduped()
+            if clean.buckme.count != decoded.buckme.count || clean.pendientes.count != decoded.pendientes.count ||
+               clean.money.count != decoded.money.count || clean.libreta.count != decoded.libreta.count {
+                var c = clean; c.updatedAt = Date()
+                data = c
+                if let out = try? Self.encoder.encode(c) { try? out.write(to: url, options: .atomic) }
+            }
         }
         if !data.importedEventLog { importEventLog() }
         if !data.seededV2 { seedV2() }

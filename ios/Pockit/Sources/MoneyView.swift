@@ -364,8 +364,7 @@ struct BuckmeSheet: View {
                             if editing {
                                 TextField(t.s("Nombre", "Name"), text: $a.name).font(Theme.text(16)).foregroundStyle(.white)
                                 Spacer()
-                                TextField("$0", value: $a.amount, format: .number)
-                                    .keyboardType(.numberPad)
+                                AmountField(amount: $a.amount)
                                     .multilineTextAlignment(.trailing)
                                     .font(Theme.text(16, .semibold))
                                     .frame(maxWidth: 130)
@@ -513,5 +512,28 @@ struct VehicleSheet: View {
             }
         }
         .presentationBackground(Theme.nightDeep)
+    }
+}
+
+
+/// Campo de monto que no reacomoda el número mientras escribís (el formato con comas movía el cursor al final).
+struct AmountField: View {
+    @Binding var amount: Int
+    @State private var text = ""
+    @FocusState private var focused: Bool
+
+    var body: some View {
+        TextField("$0", text: $text)
+            .keyboardType(.numberPad)
+            .focused($focused)
+            .onAppear { text = amount == 0 ? "" : String(amount) }
+            .onChange(of: text) { _, new in
+                let digits = new.filter(\.isNumber)
+                if digits != new { text = digits; return }
+                amount = Int(digits) ?? 0
+            }
+            .onChange(of: amount) { _, a in
+                if !focused, Int(text) ?? 0 != a { text = a == 0 ? "" : String(a) }
+            }
     }
 }

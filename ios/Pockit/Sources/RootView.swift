@@ -343,13 +343,24 @@ struct ChatColumn: View {
         GeometryReader { g in
             let isPhone = UIDevice.current.userInterfaceIdiom == .phone
             // claude.ai abre su barra lateral desde unos 640 px: la página se queda en 600 px de ancho.
-            let zoom: CGFloat = isPhone ? 1 : min(1.3, max(1, g.size.width / 600))
-            let width = min(g.size.width, 600 * zoom)
-            WebContainer(webView: webView)
-                .frame(width: width, height: g.size.height)
-                .frame(maxWidth: .infinity)
-                .onAppear { web.setZoom(zoom) }
-                .onChange(of: zoom) { _, z in web.setZoom(z) }
+            // Si sobra espacio a la derecha (iPad grande acostado / Mac), ahí va la Libreta.
+            let W = g.size.width
+            let panel: CGFloat = 330
+            let showPanel = !isPhone && W >= 600 + panel + 10
+            let area = showPanel ? W - panel - 1 : W
+            let zoom: CGFloat = isPhone ? 1 : min(1.3, max(1, area / 600))
+            let width = min(area, 600 * zoom)
+            HStack(spacing: 0) {
+                WebContainer(webView: webView)
+                    .frame(width: width, height: g.size.height)
+                    .frame(maxWidth: .infinity)
+                if showPanel {
+                    Rectangle().fill(Theme.line).frame(width: 1)
+                    NotesPanel().frame(width: panel)
+                }
+            }
+            .onAppear { web.setZoom(zoom) }
+            .onChange(of: zoom) { _, z in web.setZoom(z) }
         }
     }
 }

@@ -137,11 +137,11 @@ final class SyncManager: ObservableObject {
                 // Hay algo nuevo en otro dispositivo
                 applyingRemote = true
                 if localChanged {
-                    var merged = Self.merge(local: local, remote: remote.data)
+                    var merged = Self.merge(local: local, remote: remote.data).deduped()
                     merged.updatedAt = Date()
                     store.replaceFromSync(merged)
                 } else {
-                    store.replaceFromSync(remote.data)
+                    store.replaceFromSync(remote.data.deduped())
                 }
                 if remote.progressPct >= 0, remote.data.updatedAt >= local.updatedAt {
                     state.progressPct = remote.progressPct
@@ -206,5 +206,43 @@ final class SyncManager: ObservableObject {
         }
         m.collectibles = cats
         return m
+    }
+}
+
+// MARK: - Limpieza de duplicados
+// Cada dispositivo lee las mismas respuestas de Marisol, así que al juntar los datos pueden quedar
+// cosas repetidas (ej. "Checking Account" dos veces). Esto las une.
+extension PockitData {
+    func deduped() -> PockitData {
+        var d = self
+        func key(_ s: String) -> String { s.trimmingCharacters(in: .whitespacesAndNewlines).lowercased() }
+        func uniq<T>(_ a: [T], by k: (T) -> String, prefer: (T, T) -> Bool = { _, _ in false }) -> [T] {
+            var out: [T] = []; var idx: [String: Int] = [:]
+            for x in a {
+                let kk = k(x)
+                if let i = idx[kk] { if prefer(x, out[i]) { out[i] = x } } else { idx[kk] = out.count; out.append(x) }
+            }
+            return out
+        }
+        d.buckme = uniq(d.buckme, by: { key($0.name) })
+        d.pendientes = uniq(d.pendientes, by: { key($0.text) }, prefer: { new, old in new.done && !old.done })
+        d.libreta = uniq(d.libreta, by: { key($0.text) })
+        d.propiedades = uniq(d.propiedades, by: { key($0.name) })
+        d.vehicles = uniq(d.vehicles, by: { key($0.name) + "|" + key($0.location) })
+        d.missions = uniq(d.missions, by: { key($0.name) })
+        // Plata: la misma foto (mismos montos) repetida en menos de 30 min cuenta una sola vez
+        var money: [MoneySnapshot] = []
+        for s in d.money.sorted(by: { $0.at < $1.at }) {
+            if let last = money.last, last.bank == s.bank, last.app == s.app, last.home == s.home,
+               s.at.timeIntervalSince(last.at) < 1800 { continue }
+            money.append(s)
+        }
+        d.money = money
+        d.collectibles = d.collectibles.map { c in
+            var c = c
+            c.items = uniq(c.items, by: { key($0.name) + "|" + key($0.variant ?? "") })
+            return c
+        }
+        return d
     }
 }

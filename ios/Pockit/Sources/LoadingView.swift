@@ -16,7 +16,7 @@ struct LoadingView: View {
                     Image("LoadingArt")
                         .resizable()
                         .scaledToFill()
-                        .frame(width: artSide, height: artSide)
+                        // 0.5.4: en el iPad el arte llena todo el ancho (antes quedaba un cuadro en el centro)
                         .frame(width: geo.size.width, height: artSide)
                         .clipped()
                         .scaleEffect(breathe ? 1.02 : 1.0)
