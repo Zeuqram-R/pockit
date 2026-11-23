@@ -122,6 +122,21 @@ struct SettingsView: View {
                     Text(t.pasteLinkFooter).font(Theme.text(13, relativeTo: .footnote)).foregroundStyle(Theme.lilac.opacity(0.85))
                 }
 
+                Section {
+                    Button {
+                        if let u = URL(string: UIApplication.openSettingsURLString) { UIApplication.shared.open(u) }
+                    } label: {
+                        Label(t.s("Permitir pegar sin preguntar", "Allow pasting without asking"), systemImage: "doc.on.clipboard")
+                    }
+                    .menuRow()
+                } header: {
+                    SectionTitle(text: t.s("PEGAR", "PASTE"))
+                } footer: {
+                    Text(t.s("iOS no deja que una app cambie esto sola. Te abre los ajustes de Pockit: tocá \"Pegar de otras apps\" y elegí \"Permitir\". Así no vuelve a salir la confirmación.",
+                             "iOS doesn't let an app change this itself. This opens Pockit's settings: tap \"Paste from Other Apps\" and choose \"Allow\". The prompt won't show again."))
+                        .font(Theme.text(13, relativeTo: .footnote)).foregroundStyle(Theme.lilac.opacity(0.85))
+                }
+
                 SyncSection()
                     .environmentObject(settings)
 

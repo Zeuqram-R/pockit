@@ -14,6 +14,8 @@ final class WebModel: NSObject, ObservableObject {
     @Published var progress: Double = 0
     @Published var hasLoadedOnce = false
     @Published var loadError = false
+    /// false cuando el teléfono pierde internet (pa' avisar en el chat)
+    @Published var online = true
     /// Cuando vuelve el internet, se reintenta solo.
     private let netMonitor = NWPathMonitor()
     private var netStarted = false
@@ -21,10 +23,11 @@ final class WebModel: NSObject, ObservableObject {
         guard !netStarted else { return }
         netStarted = true
         netMonitor.pathUpdateHandler = { [weak self] path in
-            guard path.status == .satisfied else { return }
+            let ok = path.status == .satisfied
             Task { @MainActor in
-                guard let self, self.loadError, !self.hasLoadedOnce else { return }
-                self.loadHome()
+                guard let self else { return }
+                self.online = ok
+                if ok, self.loadError, !self.hasLoadedOnce { self.loadHome() }
             }
         }
         netMonitor.start(queue: DispatchQueue(label: "pockit.net"))

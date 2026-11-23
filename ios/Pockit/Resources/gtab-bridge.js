@@ -22,6 +22,12 @@
     ".pk-pin.pk-new{animation:pkDrop .35s cubic-bezier(.3,1.5,.5,1)}",
     "@keyframes pkDrop{0%{transform:translateY(-20px) scale(.6);opacity:0}100%{transform:none;opacity:1}}"
   ].join("\n");
+  // v3: el mapa llena hasta abajo (sin la franja azul): la página usa toda la pantalla, también la zona de la rayita
+  try {
+    var vp = document.querySelector("meta[name=viewport]");
+    if (!vp) { vp = document.createElement("meta"); vp.name = "viewport"; (document.head || document.documentElement).appendChild(vp); }
+    vp.content = "width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no,viewport-fit=cover";
+  } catch (e) {}
   var st = document.createElement("style");
   st.id = "pk-map-css";
   st.textContent = css;
@@ -208,6 +214,7 @@
     });
   };
   window.addEventListener("resize", function () { try { map && map.invalidateSize(); } catch (e) {} });
+  window.pkFit = function () { try { map && map.invalidateSize({ pan: false }); } catch (e) {} };
   window.pkFocus = function (lat, lng, zoom) {
     if (!map) return {};
     map.setView([lat, lng], zoom == null ? Math.max(map.getZoom(), 4) : zoom, { animate: false });

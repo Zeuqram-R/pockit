@@ -98,6 +98,7 @@ final class MapWeb: NSObject, ObservableObject, WKScriptMessageHandler, WKNaviga
         webView.scrollView.isScrollEnabled = false
         webView.scrollView.bounces = false
         webView.scrollView.contentInsetAdjustmentBehavior = .never
+        webView.scrollView.contentInset = .zero
         webView.allowsLinkPreview = false
     }
 
@@ -243,6 +244,8 @@ struct MapWebContainer: UIViewRepresentable {
         return v
     }
     func updateUIView(_ v: UIView, context: Context) {
+        // que Leaflet vuelva a medir cuando cambia el tamaño (si no, abajo quedaba una franja sin mapa)
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.2) { web.evaluateJavaScript("window.pkFit && window.pkFit()") }
         if web.superview !== v {
             web.removeFromSuperview()
             web.translatesAutoresizingMaskIntoConstraints = false

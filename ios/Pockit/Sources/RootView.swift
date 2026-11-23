@@ -37,6 +37,18 @@ struct RootView: View {
                         QuickBar()
                         ChatColumn(webView: web.webView)
                             .overlay { if web.loadError && !web.hasLoadedOnce { OfflineChatCard() } }
+                            .overlay(alignment: .top) {
+                                if !web.online && web.hasLoadedOnce {
+                                    Label(settings.t.s("Sin internet · Marisol responde cuando vuelva la conexión", "Offline · Marisol replies when you're back online"),
+                                          systemImage: "wifi.slash")
+                                        .font(Theme.text(13, .semibold)).foregroundStyle(.white)
+                                        .padding(.horizontal, 14).padding(.vertical, 8)
+                                        .background(Capsule().fill(Theme.coral.opacity(0.9)))
+                                        .padding(.top, 8)
+                                        .transition(.move(edge: .top).combined(with: .opacity))
+                                }
+                            }
+                            .animation(.easeInOut(duration: 0.3), value: web.online)
                             // El historial sigue detrás del teclado (como en iMessage); chat.js sube la caja.
                             .ignoresSafeArea(.keyboard, edges: .bottom)
                             // Conversación nueva: vista nativa encima de la página del proyecto.
