@@ -223,6 +223,35 @@ final class WebModel: NSObject, ObservableObject {
 
     // MARK: Puente con claude.ai
 
+    /// Al pegar, claude.ai además lee el portapapeles con navigator.clipboard y iOS mostraba el globito de "Pegar".
+    /// Se instala antes que cargue claude.ai: si acabás de pegar, se le dan los datos del pegado sin preguntar.
+    static let pasteShim = #"""
+    (function () {
+      if (window.__pkPaste || !window.Clipboard) return; window.__pkPaste = true;
+      var last = null;
+      document.addEventListener("paste", function (e) {
+        var d = e.clipboardData; if (!d) return;
+        var items = {}, text = "";
+        try {
+          Array.prototype.forEach.call(d.types || [], function (t) {
+            if (t === "Files") return;
+            var v = d.getData(t); if (t === "text/plain") text = v;
+            if (v) items[t] = new Blob([v], { type: t });
+          });
+          Array.prototype.forEach.call(d.files || [], function (f) { if (f.type && !items[f.type]) items[f.type] = f; });
+        } catch (er) {}
+        last = { at: Date.now(), items: items, text: text };
+      }, true);
+      var fresh = function () { return last && Date.now() - last.at < 2000; };
+      var P = Clipboard.prototype, oRead = P.read, oText = P.readText;
+      if (oRead) P.read = function () {
+        if (fresh() && window.ClipboardItem && Object.keys(last.items).length) return Promise.resolve([new ClipboardItem(last.items)]);
+        return oRead.apply(this, arguments);
+      };
+      if (oText) P.readText = function () { return fresh() ? Promise.resolve(last.text) : oText.apply(this, arguments); };
+    })();
+    """#
+
     /// Prefijo ⟦device⟧ ⟦lang⟧ que va al inicio de cada mensaje.
     func setPrefix(_ value: String) {
         prefix = value
@@ -230,6 +259,7 @@ final class WebModel: NSObject, ObservableObject {
         let ucc = webView.configuration.userContentController
         ucc.removeAllUserScripts()
         ucc.addUserScript(WKUserScript(source: script, injectionTime: .atDocumentStart, forMainFrameOnly: true))
+        ucc.addUserScript(WKUserScript(source: Self.pasteShim, injectionTime: .atDocumentStart, forMainFrameOnly: true))
         if let url = Bundle.main.url(forResource: "pockit", withExtension: "js"),
            let js = try? String(contentsOf: url, encoding: .utf8) {
             ucc.addUserScript(WKUserScript(source: js, injectionTime: .atDocumentEnd, forMainFrameOnly: true))

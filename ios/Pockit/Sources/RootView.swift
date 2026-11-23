@@ -131,6 +131,8 @@ struct RootView: View {
         .onAppear {
             state.onEvent = { tag in store.ingest(tag) }
             SyncManager.shared.attach(store: store, state: state)
+            // El mapa se va cargando por detrás unos segundos después de abrir, pa' que la pestaña abra de una.
+            DispatchQueue.main.asyncAfter(deadline: .now() + 6) { MapWeb.shared.start() }
             WidgetBridge.update(store: store, state: state, lang: settings.language)
             Task { await SyncManager.shared.sync() }
             // Si nunca se guardó la última conversación, abrir la más reciente del panel.

@@ -85,7 +85,8 @@ final class MapWeb: NSObject, ObservableObject, WKScriptMessageHandler, WKNaviga
             ucc.addUserScript(WKUserScript(source: js, injectionTime: .atDocumentEnd, forMainFrameOnly: true))
         }
         cfg.userContentController = ucc
-        webView = WKWebView(frame: .zero, configuration: cfg)
+        // Tamaño de pantalla desde el principio: así el mapa se arma bien aunque cargue por detrás.
+        webView = WKWebView(frame: UIScreen.main.bounds, configuration: cfg)
         super.init()
         ucc.add(self, name: "pockitMap")
         webView.navigationDelegate = self
@@ -103,7 +104,15 @@ final class MapWeb: NSObject, ObservableObject, WKScriptMessageHandler, WKNaviga
         failed = false
         webView.load(URLRequest(url: Self.url))
     }
-    func reload() { ready = false; failed = false; webView.load(URLRequest(url: Self.url)) }
+
+    /// Sin internet: se intenta abrir lo que quedó guardado en el caché de la última vez.
+    private var triedCache = false
+    private func loadFromCache() {
+        guard !triedCache else { failed = true; return }
+        triedCache = true
+        webView.load(URLRequest(url: Self.url, cachePolicy: .returnCacheDataDontLoad))
+    }
+    func reload() { ready = false; failed = false; triedCache = false; webView.load(URLRequest(url: Self.url)) }
 
     func setPins(_ pins: [MapPin]) {
         let arr: [[String: Any]] = pins.map { p in
@@ -206,8 +215,8 @@ final class MapWeb: NSObject, ObservableObject, WKScriptMessageHandler, WKNaviga
         if let u = action.request.url, u.host?.hasSuffix("gtabase.com") == true, u.path.hasPrefix("/gta-6/map") { return .allow }
         return action.navigationType == .other ? .allow : .cancel
     }
-    func webView(_ webView: WKWebView, didFail navigation: WKNavigation!, withError error: Error) { failed = true }
-    func webView(_ webView: WKWebView, didFailProvisionalNavigation navigation: WKNavigation!, withError error: Error) { failed = true }
+    func webView(_ webView: WKWebView, didFail navigation: WKNavigation!, withError error: Error) { if !ready { loadFromCache() } }
+    func webView(_ webView: WKWebView, didFailProvisionalNavigation navigation: WKNavigation!, withError error: Error) { loadFromCache() }
 }
 
 struct MapWebContainer: UIViewRepresentable {
