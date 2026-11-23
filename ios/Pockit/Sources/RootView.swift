@@ -342,8 +342,9 @@ struct ChatColumn: View {
     var body: some View {
         GeometryReader { g in
             let isPhone = UIDevice.current.userInterfaceIdiom == .phone
-            let zoom: CGFloat = isPhone ? 1 : min(1.3, max(1, g.size.width / 640))
-            let width = min(g.size.width, 720 * zoom)
+            // claude.ai abre su barra lateral desde unos 640 px: la página se queda en 600 px de ancho.
+            let zoom: CGFloat = isPhone ? 1 : min(1.3, max(1, g.size.width / 600))
+            let width = min(g.size.width, 600 * zoom)
             WebContainer(webView: webView)
                 .frame(width: width, height: g.size.height)
                 .frame(maxWidth: .infinity)

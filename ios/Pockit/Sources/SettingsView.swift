@@ -240,7 +240,11 @@ struct SyncSection: View {
                 Button(role: .destructive) { sync.setToken(nil) } label: { Label(t.s("Quitar token de este dispositivo", "Remove token from this device"), systemImage: "key.slash") }
                     .menuRow()
             } else {
-                Button { token = ""; editing = true } label: { Label(t.s("Conectar con pockit-datos", "Connect to pockit-datos"), systemImage: "key.fill") }
+                // Se abre como página (no como ventana encima): las ventanas dentro de la lista se cerraban solas.
+                NavigationLink {
+                    TokenSheet(token: $token) { sync.setToken(token); editing = false } cancel: { editing = false }
+                        .environmentObject(settings)
+                } label: { Label(t.s("Conectar con pockit-datos", "Connect to pockit-datos"), systemImage: "key.fill") }
                     .menuRow()
             }
         } header: {
@@ -249,11 +253,6 @@ struct SyncSection: View {
             Text(t.s("Pasa tu tracker, pines y lugares entre iPhone, iPad y Mac por tu repo privado pockit-datos. El token se guarda solo en el llavero de este dispositivo. Usá un token fine-grained con permiso Contents: Read and write solo para pockit-datos.",
                      "Moves your tracker, pins and places between iPhone, iPad and Mac through your private pockit-datos repo. The token stays in this device's keychain. Use a fine-grained token with Contents: Read and write for pockit-datos only."))
                 .font(Theme.text(13, relativeTo: .footnote)).foregroundStyle(Theme.lilac.opacity(0.85))
-        }
-        .sheet(isPresented: $editing) {
-            TokenSheet(token: $token) { sync.setToken(token); editing = false } cancel: { editing = false }
-                .environmentObject(settings)
-                .presentationDetents([.medium])
         }
     }
 
@@ -283,11 +282,11 @@ struct TokenSheet: View {
     @Binding var token: String
     let save: () -> Void
     let cancel: () -> Void
+    @Environment(\.dismiss) private var dismiss
 
     var body: some View {
         let t = settings.t
-        NavigationStack {
-            VStack(alignment: .leading, spacing: 16) {
+        VStack(alignment: .leading, spacing: 16) {
                 Text(t.s("Pegalo aquí, no en el chat. Se guarda solo en el llavero de este dispositivo.",
                          "Paste it here, not in the chat. It's stored only in this device's keychain."))
                     .font(Theme.text(14)).foregroundStyle(Theme.lilac)
@@ -314,9 +313,7 @@ struct TokenSheet: View {
             .navigationTitle(t.s("Token de GitHub", "GitHub token"))
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
-                ToolbarItem(placement: .cancellationAction) { Button(t.cancel, action: cancel) }
-                ToolbarItem(placement: .confirmationAction) { Button(t.s("Guardar", "Save"), action: save).disabled(token.isEmpty) }
+                ToolbarItem(placement: .confirmationAction) { Button(t.s("Guardar", "Save")) { save(); dismiss() }.disabled(token.isEmpty) }
             }
-        }
     }
 }
