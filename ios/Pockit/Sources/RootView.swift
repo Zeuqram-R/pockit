@@ -89,6 +89,9 @@ struct RootView: View {
                     .allowsHitTesting(!keyboard.visible)
                     .accessibilityHidden(keyboard.visible)
             }
+            // 0.6.4: en el chat, la pantalla no se encoge con el teclado (si se encogía, la barra de abajo —aunque
+            // invisible— quedaba entre el teclado y la burbuja). La caja la sube el skin justo encima del teclado.
+            .ignoresSafeArea(.keyboard, edges: state.tab == .marisol ? .bottom : [])
             .animation(.easeOut(duration: 0.2), value: keyboard.visible)
 
             if let problem = web.sendProblem {
