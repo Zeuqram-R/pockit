@@ -34,9 +34,26 @@
   (document.head || document.documentElement).appendChild(st);
 
   var map = null, layer = null, pins = [], lastIds = {};
+  // v5: la página le pone al mapa "alto de pantalla menos su menú" con fuerza; se lo cambiamos a toda la pantalla
+  // (eso era la franja azul de abajo)
+  function fullHeight() {
+    var el = document.getElementById("gtab-map");
+    if (!el) return;
+    if (el.style.getPropertyValue("height") !== "100%" || el.style.getPropertyPriority("height") !== "important") {
+      el.style.setProperty("height", "100%", "important");
+      el.style.setProperty("min-height", "0", "important");
+      try { map && map.invalidateSize({ pan: false }); } catch (e) {}
+    }
+  }
   function ready() {
     map = window.GTAB && window.GTAB.map;
     if (!map || !window.L) return false;
+    fullHeight();
+    try {
+      var gm = document.getElementById("gtab-map");
+      if (gm) new MutationObserver(fullHeight).observe(gm, { attributes: true, attributeFilter: ["style"] });
+    } catch (e) {}
+    window.addEventListener("resize", fullHeight);
     try { map.invalidateSize(); } catch (e) {}
     if (!map.getPane("pkpins")) map.createPane("pkpins");
     layer = L.layerGroup().addTo(map);
