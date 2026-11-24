@@ -63,6 +63,7 @@ final class WebModel: NSObject, ObservableObject {
 
     let webView: WKWebView
     private var progressObservation: NSKeyValueObservation?
+    private var zoomObservation: NSKeyValueObservation?
     private var offsetObservation: NSKeyValueObservation?
     private var keyboardTokens: [NSObjectProtocol] = []
     private var keyboardUp = false
@@ -338,6 +339,8 @@ final class WebModel: NSObject, ObservableObject {
         case "streaming":
             isStreaming = (dict["on"] as? Bool) ?? false
             if isStreaming && pendingFirstMessage != nil { pendingSawStreaming = true }
+        case "usageBanner":
+            if let pct = dict["pct"] as? Int { UsageMonitor.shared.fromBanner(kind: dict["kind"] as? String ?? "weekly", pct: pct) }
         case "dotsDocked":
             dotsDocked = (dict["on"] as? Bool) ?? false
         case "projectChats":
@@ -453,10 +456,15 @@ extension WebModel {
         // WebKit intenta mover toda la página pa' arriba al enfocar la caja; la dejamos quieta.
         // 0.3.21: también al cerrarse el teclado (ahí la página se iba pa' abajo y volvía). Se corrige en el mismo
         // instante (sin esperar otro ciclo) y solo cuando no es el dedo: el rebote al arrastrar sigue igual.
+        zoomObservation = webView.scrollView.observe(\.zoomScale, options: [.new]) { [weak self] sv, _ in
+            MainActor.assumeIsolated {
+                if abs(sv.zoomScale - 1) > 0.001 { self?.lockZoom() }
+            }
+        }
         offsetObservation = webView.scrollView.observe(\.contentOffset, options: [.new]) { [weak self] sv, _ in
             MainActor.assumeIsolated {
                 guard let self else { return }
-                if sv.zoomScale > 1.001 && !sv.isZooming { self.lockZoom(); return }
+                if abs(sv.zoomScale - 1) > 0.001 { self.lockZoom(); return }
                 if sv.contentOffset.x != 0 && sv.zoomScale <= 1.001 { sv.contentOffset.x = 0 }
                 guard self.keyboardUp || Date() < self.keyboardLockUntil,
                       sv.contentOffset.y != 0, !sv.isTracking, !sv.isDragging else { return }
@@ -476,6 +484,7 @@ extension WebModel {
       }
       fix();
       new MutationObserver(fix).observe(document.documentElement,{childList:true,subtree:true,attributes:true,attributeFilter:['content']});
+      document.addEventListener('touchmove',function(e){ if(e.touches&&e.touches.length>1) e.preventDefault(); },{passive:false,capture:true});
       document.addEventListener('gesturestart',function(e){e.preventDefault();},{passive:false});
       document.addEventListener('gesturechange',function(e){e.preventDefault();},{passive:false});
     })();
@@ -485,6 +494,12 @@ extension WebModel {
     func lockZoom() {
         let sv = webView.scrollView
         sv.pinchGestureRecognizer?.isEnabled = false
+        sv.minimumZoomScale = 1
+        sv.maximumZoomScale = 1
+        // 0.7.5: WebKit tiene otros pellizcos en su vista de contenido; se apagan todos
+        for v in [sv] + sv.subviews {
+            for g in v.gestureRecognizers ?? [] where g is UIPinchGestureRecognizer { g.isEnabled = false }
+        }
         sv.bouncesZoom = false
         if abs(sv.zoomScale - 1) > 0.001 { sv.setZoomScale(1, animated: false) }
         if sv.contentOffset.x != 0 { sv.setContentOffset(CGPoint(x: 0, y: sv.contentOffset.y), animated: false) }

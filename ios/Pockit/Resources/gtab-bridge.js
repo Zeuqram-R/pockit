@@ -78,6 +78,7 @@
     ["touchend", "touchcancel"].forEach(function (n) { c.addEventListener(n, function () { clearTimeout(timer); }, { passive: true }); });
     map.on("contextmenu", function (e) { if (!("ontouchstart" in window)) post({ type: "longPress", lat: e.latlng.lat, lng: e.latlng.lng, near: nearby(e.latlng) }); });
     // v4: el mapa nunca deja ver la orilla (la franja azul lisa): no se puede alejar ni mover más allá de las imágenes
+    var origMin = null;
     function lockToTiles() {
       var tb = null;
       map.eachLayer(function (l) { if (!tb && l instanceof L.TileLayer && l.options.bounds) tb = L.latLngBounds(l.options.bounds); });
@@ -86,8 +87,9 @@
       map.setMaxBounds(tb);
       // zoom mínimo: el que llena la pantalla (si le falta muy poquito, se deja el de abajo y queda centrado,
       // con una orillita que queda tapada por los filtros y la barra de abajo)
-      var z = map.getBoundsZoom(tb, true);
-      map.setMinZoom(z - Math.floor(z) < 0.2 ? Math.floor(z) : Math.ceil(z));
+      // v6: ya no se limita el zoom de lejos (la franja era el alto del mapa, no esto): se puede alejar hasta ver todo
+      if (origMin == null) origMin = map.getMinZoom();
+      map.setMinZoom(Math.min(origMin, -1));
     }
     try { lockToTiles(); } catch (e) {}
     window.addEventListener("resize", function () { try { lockToTiles(); } catch (e) {} });

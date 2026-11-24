@@ -146,7 +146,7 @@ struct RootView: View {
         }
         .onAppear {
             state.onEvent = { tag in store.ingest(tag) }
-            SyncManager.shared.attach(store: store, state: state)
+            UsageMonitor.shared.start(); SyncManager.shared.attach(store: store, state: state)
             web.watchNetwork()
             // El mapa se va cargando por detrás unos segundos después de abrir, pa' que la pestaña abra de una.
             DispatchQueue.main.asyncAfter(deadline: .now() + 6) { MapWeb.shared.start() }
@@ -167,11 +167,12 @@ struct RootView: View {
             web.setPrefix(state.prefix(lang: settings.language))
         }
         .onChange(of: scenePhase) { _, phase in
-            if phase == .active { Task { await skin.refresh(); await SyncManager.shared.sync() }; Notifier.shared.becameActive(); deliverInbox() }
+            if phase == .active { UsageMonitor.shared.refresh(); Task { await skin.refresh(); await SyncManager.shared.sync() }; Notifier.shared.becameActive(); deliverInbox() }
             if phase == .background { Notifier.shared.wentToBackground(streaming: web.isStreaming) }
         }
         .onChange(of: web.isStreaming) { _, on in
             Notifier.shared.streamingChanged(on, inBackground: scenePhase != .active, lang: settings.language)
+            if !on { DispatchQueue.main.asyncAfter(deadline: .now() + 3) { UsageMonitor.shared.refresh() } }
         }
         .onChange(of: inbox.pendingMessage) { _, _ in deliverInbox() }
         .onChange(of: store.data.updatedAt) { _, _ in WidgetBridge.update(store: store, state: state, lang: settings.language) }
@@ -215,8 +216,12 @@ struct TopBar: View {
         let t = settings.t
         // Como el encabezado de iMessage: botón a la izquierda, contacto al centro, botones a la derecha.
         ZStack(alignment: .top) {
-            HStack(spacing: 10) {
-                GlassCircleButton(systemName: "line.3.horizontal", label: t.s("Conversaciones", "Chats"), action: onChats)
+            HStack(alignment: .top, spacing: 10) {
+                VStack(spacing: 8) {
+                    GlassCircleButton(systemName: "line.3.horizontal", label: t.s("Conversaciones", "Chats"), action: onChats)
+                    UsageRing()
+                }
+                .zIndex(5)
                 Spacer()
                 GlassCircleButton(systemName: state.spoilersOn ? "eye.fill" : "eye.slash.fill",
                                   label: state.spoilersOn ? t.spoilersOn : t.spoilersOff,
