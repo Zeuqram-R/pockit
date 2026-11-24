@@ -221,7 +221,8 @@ struct TopBar: View {
                 GlassCircleButton(systemName: state.spoilersOn ? "eye.fill" : "eye.slash.fill",
                                   label: state.spoilersOn ? t.spoilersOn : t.spoilersOff,
                                   tint: state.spoilersOn ? Theme.sunset : .white) { confirmSpoilers = true }
-                GlassCircleButton(systemName: "gearshape.fill", label: t.settings, action: onSettings)
+                GlassCircleButton(systemName: "gearshape.fill", label: t.settings,
+                                  assetName: settings.tabIconStyle == .game ? "Glyph_settings" : nil, action: onSettings)
             }
             .padding(.top, 10)
 
@@ -267,12 +268,19 @@ struct GlassCircleButton: View {
     let systemName: String
     let label: String
     var tint: Color = .white
+    /// Ícono propio (plantilla blanca) en vez del símbolo del sistema, p. ej. en "Estilo del juego".
+    var assetName: String? = nil
     let action: () -> Void
 
     var body: some View {
         Button(action: action) {
-            Image(systemName: systemName)
-                .font(.system(size: 17, weight: .semibold))
+            Group {
+                if let assetName {
+                    Image(assetName).renderingMode(.template).resizable().scaledToFit().frame(width: 21, height: 21)
+                } else {
+                    Image(systemName: systemName).font(.system(size: 17, weight: .semibold))
+                }
+            }
                 .foregroundStyle(tint)
                 .frame(width: 44, height: 44)
                 .background(Circle().fill(.ultraThinMaterial))
