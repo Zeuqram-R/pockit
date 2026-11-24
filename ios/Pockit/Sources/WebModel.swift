@@ -84,6 +84,9 @@ final class WebModel: NSObject, ObservableObject {
            let js = try? String(contentsOf: url, encoding: .utf8) {
             content.addUserScript(WKUserScript(source: js, injectionTime: .atDocumentEnd, forMainFrameOnly: true))
         }
+        // 0.7.3: el chat no se puede pellizcar ni hacer zoom con doble toque (como una app, no como una página)
+        content.addUserScript(WKUserScript(source: WebModel.noZoomJS, injectionTime: .atDocumentStart, forMainFrameOnly: true))
+        config.ignoresViewportScaleLimits = false
         config.userContentController = content
 
         webView = WKWebView(frame: .zero, configuration: config)
@@ -93,6 +96,9 @@ final class WebModel: NSObject, ObservableObject {
         // El borde izquierdo abre el panel de conversaciones (no "atrás").
         webView.allowsBackForwardNavigationGestures = false
         webView.scrollView.contentInsetAdjustmentBehavior = .never
+        webView.scrollView.bouncesZoom = false
+        webView.scrollView.pinchGestureRecognizer?.isEnabled = false
+        webView.scrollView.alwaysBounceHorizontal = false
         // "Listo" y demás botones del teclado en rosa (no azul).
         webView.tintColor = UIColor(Theme.switchPink)
 
@@ -368,6 +374,7 @@ extension WebModel: WKNavigationDelegate {
 
     func webView(_ webView: WKWebView, didFinish navigation: WKNavigation!) {
         hideKeyboardAccessoryBar()
+        lockZoom()
         hasLoadedOnce = true
         loadError = false
         if pendingReloading {
@@ -448,11 +455,39 @@ extension WebModel {
         // instante (sin esperar otro ciclo) y solo cuando no es el dedo: el rebote al arrastrar sigue igual.
         offsetObservation = webView.scrollView.observe(\.contentOffset, options: [.new]) { [weak self] sv, _ in
             MainActor.assumeIsolated {
-                guard let self, self.keyboardUp || Date() < self.keyboardLockUntil,
+                guard let self else { return }
+                if sv.zoomScale > 1.001 && !sv.isZooming { self.lockZoom(); return }
+                if sv.contentOffset.x != 0 && sv.zoomScale <= 1.001 { sv.contentOffset.x = 0 }
+                guard self.keyboardUp || Date() < self.keyboardLockUntil,
                       sv.contentOffset.y != 0, !sv.isTracking, !sv.isDragging else { return }
                 sv.setContentOffset(CGPoint(x: sv.contentOffset.x, y: 0), animated: false)
             }
         }
+    }
+
+    static let noZoomJS = """
+    (function(){
+      var C='width=device-width,initial-scale=1,maximum-scale=1,minimum-scale=1,user-scalable=no,viewport-fit=cover';
+      function fix(){
+        var h=document.head; if(!h) return;
+        var m=h.querySelector('meta[name=viewport]');
+        if(!m){ m=document.createElement('meta'); m.name='viewport'; h.appendChild(m); }
+        if(m.content!==C) m.content=C;
+      }
+      fix();
+      new MutationObserver(fix).observe(document.documentElement,{childList:true,subtree:true,attributes:true,attributeFilter:['content']});
+      document.addEventListener('gesturestart',function(e){e.preventDefault();},{passive:false});
+      document.addEventListener('gesturechange',function(e){e.preventDefault();},{passive:false});
+    })();
+    """
+
+    /// WebKit a veces vuelve a crear/activar el pellizco al cargar; lo apagamos otra vez y regresamos a escala 1.
+    func lockZoom() {
+        let sv = webView.scrollView
+        sv.pinchGestureRecognizer?.isEnabled = false
+        sv.bouncesZoom = false
+        if abs(sv.zoomScale - 1) > 0.001 { sv.setZoomScale(1, animated: false) }
+        if sv.contentOffset.x != 0 { sv.setContentOffset(CGPoint(x: 0, y: sv.contentOffset.y), animated: false) }
     }
 
     private func keyboardChanged(end: CGRect, duration: Double) {
