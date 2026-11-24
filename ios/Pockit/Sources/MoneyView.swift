@@ -18,6 +18,7 @@ struct MoneyView: View {
         let t = settings.t
         let current = store.currentMoney
         let previous = store.data.money.dropLast().last
+        let tier = BuckmeTier.from(store.data.buckmeTier)
         NavigationStack {
             List {
                 LargeTitleRow(text: "PORTFOLIO")
@@ -56,11 +57,13 @@ struct MoneyView: View {
                     HStack(spacing: 10) {
                         MoneyTile(symbol: "building.columns.fill", title: t.s("Banco", "Bank"), value: current?.bank, delta: previous.map { (current?.bank ?? 0) - $0.bank })
                         Button { showBuckme = true } label: {
-                            MoneyTile(symbol: "iphone", asset: "Glyph_bankapp", title: "BUCKME", value: current?.app, delta: previous.map { (current?.app ?? 0) - $0.app }, showsChevron: true)
+                            MoneyTile(symbol: "iphone", title: "BUCKME", value: current?.app, delta: previous.map { (current?.app ?? 0) - $0.app }, showsChevron: true,
+                                      ring: (image: "Icon_buckme", progress: Double(current?.app ?? 0) / Double(tier.totalLimit), color: tier.color))
                         }
                         .buttonStyle(.plain)
                         .accessibilityHint(t.s("Abre el desglose de BUCKME", "Opens the BUCKME breakdown"))
-                        MoneyTile(symbol: "house.fill", title: "STASH", value: current?.home, delta: previous.map { (current?.home ?? 0) - $0.home })
+                        MoneyTile(symbol: "house.fill", title: "STASH", value: current?.home, delta: previous.map { (current?.home ?? 0) - $0.home },
+                                  ring: (image: "Icon_stash", progress: Double(current?.home ?? 0) / Double(BuckmeTier.stashLimit), color: Color(red: 0.25, green: 0.85, blue: 0.95)))
                     }
                     .listRowBackground(Color.clear)
                     .listRowInsets(EdgeInsets(top: 6, leading: 0, bottom: 6, trailing: 0))
@@ -212,15 +215,21 @@ struct MoneyTile: View {
     let value: Int?
     let delta: Int?
     var showsChevron = false
+    /// Ícono a color con anillo de progreso (BuckMe, Stash).
+    var ring: (image: String, progress: Double, color: Color)? = nil
 
     var body: some View {
         VStack(alignment: .leading, spacing: 6) {
             HStack {
-                Group {
-                    if let asset { Image(asset).renderingMode(.template).resizable().scaledToFit().frame(width: 20, height: 20) }
-                    else { Image(systemName: symbol).font(.system(size: 16, weight: .semibold)) }
+                if let ring {
+                    ProgressRingIcon(image: ring.image, progress: ring.progress, color: ring.color, size: 40)
+                } else {
+                    Group {
+                        if let asset { Image(asset).renderingMode(.template).resizable().scaledToFit().frame(width: 20, height: 20) }
+                        else { Image(systemName: symbol).font(.system(size: 16, weight: .semibold)) }
+                    }
+                    .foregroundStyle(Theme.switchPink)
                 }
-                .foregroundStyle(Theme.switchPink)
                 Spacer()
                 if showsChevron { Image(systemName: "chevron.right").font(.system(size: 12, weight: .bold)).foregroundStyle(Theme.lilac) }
             }
@@ -347,15 +356,23 @@ struct BuckmeSheet: View {
     @State private var accounts: [BuckmeAccount] = []
     @State private var editing = false
 
+    private func isFamily(_ a: BuckmeAccount) -> Bool { a.name.range(of: "famil", options: .caseInsensitive) != nil }
+
     var body: some View {
         let t = settings.t
         let total = accounts.reduce(0) { $0 + $1.amount }
+        let tier = BuckmeTier.from(store.data.buckmeTier)
         NavigationStack {
             List {
                 Section {
-                    VStack(alignment: .leading, spacing: 4) {
-                        Text("TOTAL").font(Theme.display(15, weight: .semibold)).foregroundStyle(Theme.lilac)
-                        Text(Fmt.money(total)).font(Theme.display(40)).foregroundStyle(.white)
+                    HStack(spacing: 14) {
+                        ProgressRingIcon(image: "Icon_buckme", progress: Double(total) / Double(tier.totalLimit), color: tier.color, size: 72, line: 6)
+                        VStack(alignment: .leading, spacing: 4) {
+                            Text("TOTAL").font(Theme.display(15, weight: .semibold)).foregroundStyle(Theme.lilac)
+                            Text(Fmt.money(total)).font(Theme.display(40)).foregroundStyle(.white)
+                            Text("\(Int((Double(total) / Double(tier.totalLimit) * 100).rounded()))% \(t.s("de", "of")) \(Fmt.money(tier.totalLimit)) · \(tier.name)")
+                                .font(Theme.text(12, relativeTo: .caption)).foregroundStyle(tier.color)
+                        }
                     }
                     .padding(.vertical, 4)
                     .menuRow()
@@ -374,9 +391,17 @@ struct BuckmeSheet: View {
                                     .font(Theme.text(16, .semibold))
                                     .frame(maxWidth: 130)
                             } else {
-                                Text(a.name).font(Theme.text(16)).foregroundStyle(.white)
-                                Spacer()
-                                Text(Fmt.money(a.amount)).font(Theme.text(16, .semibold)).foregroundStyle(.white)
+                                let limit = isFamily(a) ? tier.familyLimit : tier.personalLimit
+                                VStack(alignment: .leading, spacing: 6) {
+                                    HStack {
+                                        Text(a.name).font(Theme.text(16)).foregroundStyle(.white)
+                                        Spacer()
+                                        Text(Fmt.money(a.amount)).font(Theme.text(16, .semibold)).foregroundStyle(.white)
+                                    }
+                                    LimitBar(value: a.amount, limit: limit, color: tier.color)
+                                    Text("\(t.s("Límite", "Limit")) \(Fmt.money(limit))")
+                                        .font(Theme.text(11, relativeTo: .caption2)).foregroundStyle(Theme.lilac.opacity(0.85))
+                                }
                             }
                         }
                         .menuRow()
@@ -392,6 +417,41 @@ struct BuckmeSheet: View {
                     SectionTitle(text: t.s("Cuentas", "Accounts"))
                 } footer: {
                     Text(t.s("El total de BUCKME en Money es la suma de estas cuentas.", "BUCKME's total in Money is the sum of these accounts."))
+                        .font(Theme.text(13, relativeTo: .footnote)).foregroundStyle(Theme.lilac.opacity(0.85))
+                }
+                Section {
+                    ForEach(BuckmeTier.allCases) { lv in
+                        let isCurrent = lv == tier
+                        Button { store.setBuckmeTier(lv); UISelectionFeedbackGenerator().selectionChanged() } label: {
+                            HStack(alignment: .top, spacing: 12) {
+                                Image(lv.asset).resizable().scaledToFit().frame(width: 46, height: 46)
+                                VStack(alignment: .leading, spacing: 3) {
+                                    HStack(spacing: 6) {
+                                        Text(lv.name).font(Theme.text(16, .semibold)).foregroundStyle(lv.color)
+                                        if isCurrent {
+                                            Text(t.s("ACTUAL", "CURRENT")).font(Theme.display(11, weight: .semibold))
+                                                .padding(.horizontal, 6).padding(.vertical, 2)
+                                                .background(Capsule().fill(lv.color.opacity(0.25)))
+                                                .foregroundStyle(lv.color)
+                                        }
+                                    }
+                                    ForEach(lv.perks(t), id: \.self) { p in
+                                        Text("· " + p).font(Theme.text(13, relativeTo: .footnote)).foregroundStyle(.white.opacity(isCurrent ? 0.95 : 0.65))
+                                    }
+                                }
+                                Spacer(minLength: 0)
+                            }
+                            .padding(.vertical, 4)
+                            .contentShape(Rectangle())
+                        }
+                        .buttonStyle(.plain)
+                        .listRowBackground(isCurrent ? lv.color.opacity(0.14) : Theme.panel.opacity(0.55))
+                    }
+                } header: {
+                    SectionTitle(text: t.s("Niveles y beneficios", "Tiers and perks"))
+                } footer: {
+                    Text(t.s("Tocá tu nivel cuando subás. El anillo de BuckMe se llena con tu total contra el límite del nivel (cuenta personal + family savings). El de Stash, contra $20.000.",
+                             "Tap your tier when you level up. BuckMe's ring fills with your total vs. the tier limit (personal + family savings). Stash's ring, vs. $20,000."))
                         .font(Theme.text(13, relativeTo: .footnote)).foregroundStyle(Theme.lilac.opacity(0.85))
                 }
             }

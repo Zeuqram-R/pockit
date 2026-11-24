@@ -202,6 +202,8 @@ struct PockitData: Codable {
     var places: [String] = []
     /// Categorías del mapa que se muestran completas (ej. gasolineras).
     var placeCats: [String] = []
+    /// Nivel de BuckMe (regular, silver, gold, premium): pone los límites de los anillos.
+    var buckmeTier = "regular"
     var updatedAt = Date()
 
     init() {}
@@ -229,6 +231,7 @@ struct PockitData: Codable {
         pins = (try? c.decodeIfPresent([MapPin].self, forKey: .pins)) ?? []
         places = try c.decodeIfPresent([String].self, forKey: .places) ?? []
         placeCats = try c.decodeIfPresent([String].self, forKey: .placeCats) ?? []
+        buckmeTier = try c.decodeIfPresent(String.self, forKey: .buckmeTier) ?? "regular"
         updatedAt = try c.decodeIfPresent(Date.self, forKey: .updatedAt) ?? Date()
     }
 }
@@ -729,6 +732,10 @@ final class PockitStore: ObservableObject {
             }
         }
         syncBuckmeTotal()
+    }
+
+    func setBuckmeTier(_ tier: BuckmeTier) {
+        mutate { $0.buckmeTier = tier.rawValue }
     }
 
     func saveBuckme(_ accounts: [BuckmeAccount]) {
