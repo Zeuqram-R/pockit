@@ -228,7 +228,7 @@ struct TopBar: View {
                                   label: state.spoilersOn ? t.spoilersOn : t.spoilersOff,
                                   tint: state.spoilersOn ? Theme.sunset : .white) { confirmSpoilers = true }
                 GlassCircleButton(systemName: "gearshape.fill", label: t.settings,
-                                  assetName: settings.tabIconStyle == .game ? "Glyph_settings" : nil, action: onSettings)
+                                  assetName: settings.tabIconStyle == .game ? "Glyph_settings" : "Color_settings", action: onSettings)
             }
             .padding(.top, 10)
 
@@ -282,7 +282,9 @@ struct GlassCircleButton: View {
         Button(action: action) {
             Group {
                 if let assetName {
-                    Image(assetName).renderingMode(.template).resizable().scaledToFit().frame(width: 21, height: 21)
+                    // los íconos "Color_" van con sus colores; los "Glyph_" se pintan del color del botón
+                    Image(assetName).renderingMode(assetName.hasPrefix("Color_") ? .original : .template)
+                        .resizable().scaledToFit().frame(width: assetName.hasPrefix("Color_") ? 26 : 21, height: assetName.hasPrefix("Color_") ? 26 : 21)
                 } else {
                     Image(systemName: systemName).font(.system(size: 17, weight: .semibold))
                 }

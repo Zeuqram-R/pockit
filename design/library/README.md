@@ -10,3 +10,4 @@
 | buckme | Cuadro BUCKME (de la imagen de Jose), el anillo lo dibuja la app | `Icon_buckme` (en uso) |
 | stash | Cuadro STASH (de la imagen de Jose), el anillo lo dibuja la app | `Icon_stash` (en uso) |
 | tier_regular/silver/gold/premium | Niveles de BuckMe | `Tier_*` (en uso) |
+| ajustes_color | Botón de Ajustes a color (morado, rosa, azul) | `Color_settings` (en uso) |

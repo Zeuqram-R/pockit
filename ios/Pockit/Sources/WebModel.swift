@@ -387,6 +387,10 @@ final class WebModel: NSObject, ObservableObject {
         case "streaming":
             isStreaming = (dict["on"] as? Bool) ?? false
             if isStreaming && pendingFirstMessage != nil { pendingSawStreaming = true }
+        case "copyText":
+            if let t = dict["text"] as? String, !t.isEmpty { UIPasteboard.general.string = t }
+        case "haptic":
+            UIImpactFeedbackGenerator(style: .medium).impactOccurred()
         case "chatMissing":
             if let id = dict["chatID"] as? String { onChatMissing?(id) }
         case "usageBanner":
