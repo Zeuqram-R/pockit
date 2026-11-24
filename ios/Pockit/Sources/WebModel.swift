@@ -387,6 +387,8 @@ final class WebModel: NSObject, ObservableObject {
         case "streaming":
             isStreaming = (dict["on"] as? Bool) ?? false
             if isStreaming && pendingFirstMessage != nil { pendingSawStreaming = true }
+        case "previewFile":
+            if let b = dict["b64"] as? String { FilePreviewer.shared.show(base64: b, name: dict["name"] as? String ?? "", mime: dict["mime"] as? String ?? "") }
         case "copyText":
             if let t = dict["text"] as? String, !t.isEmpty { UIPasteboard.general.string = t }
         case "haptic":
@@ -414,6 +416,8 @@ final class WebModel: NSObject, ObservableObject {
 extension WebModel: WKNavigationDelegate {
     func webView(_ webView: WKWebView, decidePolicyFor navigationAction: WKNavigationAction) async -> WKNavigationActionPolicy {
         guard let url = navigationAction.request.url else { return .allow }
+        // 0.8.1: el botón de descargar de un archivo del chat
+        if navigationAction.shouldPerformDownload { return .download }
         let isMainFrame = navigationAction.targetFrame?.isMainFrame ?? true
         let scheme = url.scheme?.lowercased() ?? ""
 
@@ -427,6 +431,19 @@ extension WebModel: WKNavigationDelegate {
             return .cancel
         }
         return .allow
+    }
+
+    func webView(_ webView: WKWebView, decidePolicyFor navigationResponse: WKNavigationResponse) async -> WKNavigationResponsePolicy {
+        if let r = navigationResponse.response as? HTTPURLResponse,
+           (r.value(forHTTPHeaderField: "Content-Disposition") ?? "").lowercased().contains("attachment") { return .download }
+        if !navigationResponse.canShowMIMEType { return .download }
+        return .allow
+    }
+    func webView(_ webView: WKWebView, navigationAction: WKNavigationAction, didBecome download: WKDownload) {
+        download.delegate = DownloadKeeper.shared
+    }
+    func webView(_ webView: WKWebView, navigationResponse: WKNavigationResponse, didBecome download: WKDownload) {
+        download.delegate = DownloadKeeper.shared
     }
 
     func webView(_ webView: WKWebView, didFinish navigation: WKNavigation!) {
@@ -465,11 +482,39 @@ extension WebModel: WKNavigationDelegate {
     }
 }
 
+extension WebModel {
+    /// Baja el archivo desde la página (con la sesión) y lo abre en pantalla completa.
+    func previewViaPage(_ url: URL) {
+        let js = """
+        try {
+          const r = await fetch(u, { credentials: 'include' });
+          const mime = r.headers.get('content-type') || '';
+          const cd = r.headers.get('content-disposition') || '';
+          const m = cd.match(/filename\\*?=(?:UTF-8'')?"?([^";]+)/i);
+          const name = m ? decodeURIComponent(m[1]) : (u.split('/').pop().split('?')[0] || 'archivo');
+          const a = new Uint8Array(await r.arrayBuffer());
+          let s = ''; for (let i = 0; i < a.length; i += 32768) s += String.fromCharCode.apply(null, a.subarray(i, i + 32768));
+          window.webkit.messageHandlers.pockit.postMessage({ type: 'previewFile', name: name, mime: mime, b64: btoa(s) });
+          return 'ok';
+        } catch (e) { return String(e); }
+        """
+        Task { _ = try? await webView.callAsyncJavaScript(js, arguments: ["u": url.absoluteString], contentWorld: .page) }
+    }
+}
+
 extension WebModel: WKUIDelegate {
     /// Links con target="_blank": si son de claude.ai se abren aquí mismo; si no, en Safari.
     func webView(_ webView: WKWebView, createWebViewWith configuration: WKWebViewConfiguration,
                  for navigationAction: WKNavigationAction, windowFeatures: WKWindowFeatures) -> WKWebView? {
         if let url = navigationAction.request.url {
+            let scheme = url.scheme?.lowercased() ?? ""
+            let path = url.path.lowercased()
+            // 0.8.1: archivos del chat (blob/data o enlaces de archivos de claude.ai) se abren en la vista completa, sin salir del chat
+            if scheme == "blob" || scheme == "data" ||
+               ((url.host.map { Self.isAllowed($0.lowercased()) } ?? false) && (path.contains("/files/") || path.contains("download") || path.contains("/api/"))) {
+                previewViaPage(url)
+                return nil
+            }
             if let host = url.host?.lowercased(), Self.isAllowed(host) {
                 webView.load(navigationAction.request)
             } else {

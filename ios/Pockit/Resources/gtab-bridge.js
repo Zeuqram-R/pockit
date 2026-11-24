@@ -16,6 +16,9 @@
     ".leaflet-pkpins-pane{z-index:660}",
     ".pk-zone{position:absolute;transform:translate(-50%,14px);white-space:nowrap;padding:3px 9px;border-radius:11px;background:rgba(27,16,48,.82);border:1.5px solid #FF3E8A;color:#FFF4E6;font:700 12px -apple-system,system-ui,sans-serif;box-shadow:0 2px 8px rgba(0,0,0,.35)}",
     ".pk-zone-done{border-color:#2EE6A8;color:#2EE6A8}",
+    "@keyframes pkZoneIn{0%{opacity:0;transform:translate(-50%,14px) scale(.3)}60%{opacity:1;transform:translate(-50%,14px) scale(1.12)}80%{transform:translate(-50%,14px) scale(.96)}100%{opacity:1;transform:translate(-50%,14px) scale(1)}}",
+    ".pk-zone{animation:pkZoneIn .42s cubic-bezier(.2,.9,.3,1.2) both;transition:opacity .22s ease,transform .22s ease;will-change:transform,opacity}",
+    ".pk-zone.pk-zone-out{animation:none;opacity:0;transform:translate(-50%,14px) scale(.85)}",
     ".pk-stop{position:absolute;transform:translate(-50%,-50%);width:28px;height:28px;border-radius:14px;background:#FF3E8A;border:2.5px solid #FFF4E6;color:#fff;font:800 14px -apple-system,system-ui,sans-serif;display:flex;align-items:center;justify-content:center;box-shadow:0 3px 10px rgba(0,0,0,.45)}",
     ".pk-pin{width:34px!important;height:34px!important;margin:-17px 0 0 -17px!important;border-radius:50%;background:#fff;display:grid;place-items:center;box-shadow:0 2px 6px rgba(0,0,0,.35);font-size:18px;line-height:1;border:3px solid var(--c,#FF3E8A)}",
     ".pk-place{width:30px!important;height:30px!important;margin:-15px 0 0 -15px!important;border-radius:50%;background:var(--c,#333);display:grid;place-items:center;box-shadow:0 2px 6px rgba(0,0,0,.4);border:2px solid #fff;overflow:hidden}",
@@ -60,6 +63,9 @@
     try { map.invalidateSize(); } catch (e) {}
     if (!map.getPane("pkpins")) map.createPane("pkpins");
     map.on("zoomend", function () { try { zoneZoom(); } catch (e) {} });
+    // zoom más suave: sin saltos al soltar el pellizco ni rebote en los límites
+    map.options.zoomSnap = 0.25; map.options.zoomDelta = 0.5; map.options.bounceAtZoomLimits = false;
+    map.options.wheelPxPerZoomLevel = 90; map.options.zoomAnimationThreshold = 6;
     layer = L.layerGroup().addTo(map);
     // tocar y mantener = poner pin (también con el mouse en la Mac)
     var timer = null, start = null;
@@ -252,17 +258,26 @@
       });
     });
   }
-  function drawZones() {
+  var zoneFadeT = null;
+  function fadeOutZones(then) {
+    var els = document.querySelectorAll(".pk-zone");
+    if (!els.length) { then(); return; }
+    els.forEach(function (el) { el.classList.add("pk-zone-out"); });
+    clearTimeout(zoneFadeT);
+    zoneFadeT = setTimeout(then, 230);
+  }
+  function drawZones() { fadeOutZones(drawZonesNow); }
+  function drawZonesNow() {
     if (!map) return;
     if (!zoneLayer) zoneLayer = L.layerGroup().addTo(map);
     zoneLayer.clearLayers();
     if (!zoneCfg || !zoneCfg.on || !zoneStats) return;
-    var lv = zoneLevel(map.getZoom()), all = zoneStats[lv];
+    var lv = zoneLevel(map.getZoom()), all = zoneStats[lv], zIdx = 0;
     Object.keys(all).forEach(function (k) {
       var st = all[k];
       var done = st.total > 0 && st.found >= st.total;
       var icon = L.divIcon({ className: "", iconSize: [0, 0], iconAnchor: [0, 0],
-        html: "<div class='pk-zone" + (done ? " pk-zone-done" : "") + "'>" + st.found + " / " + st.total + "</div>" });
+        html: "<div class='pk-zone" + (done ? " pk-zone-done" : "") + "' style='animation-delay:" + Math.min(zIdx++ * 18, 260) + "ms'>" + st.found + " / " + st.total + "</div>" });
       var m = L.marker([st.lat, st.lng], { icon: icon, pane: "pkpins", keyboard: false });
       m.on("click", function () {
         var by = Object.keys(st.byCat).map(function (c) { return { cat: c, found: st.byCat[c].found, total: st.byCat[c].total }; })
