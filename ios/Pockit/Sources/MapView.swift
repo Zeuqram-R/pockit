@@ -146,6 +146,50 @@ final class MapWeb: NSObject, ObservableObject, WKScriptMessageHandler, WKNaviga
         if ready { webView.evaluateJavaScript("window.pkSetPlaceCats && window.pkSetPlaceCats(\(json))") }
     }
 
+    struct ZoneCat: Hashable { let cat: String; let found: Int; let total: Int }
+    struct ZoneInfo: Identifiable { let id = UUID(); let name: String; let level: String; let found: Int; let total: Int; let byCat: [ZoneCat] }
+    var onZoneTap: ((ZoneInfo) -> Void)?
+    private var pendingZones: String?
+
+    /// Coleccionables por zona: manda al mapa las zonas (del mapa guardado), qué categorías cuentan y cuáles ya tenés.
+    func setZones(on: Bool, collectibles: [CollectibleCategory]) {
+        Task { @MainActor in
+            let cats = await categories().filter { $0.isCollectible }
+            struct L: Codable { let kind: String; let sub: String?; let t: String; let lat: Double; let lng: Double }
+            struct S: Codable { let labels: [L]? }
+            let labels = (try? JSONDecoder().decode(S.self, from: Data(contentsOf: OfflineMap.shared.snapshotURL)))?.labels ?? []
+            func norm(_ s: String) -> String {
+                var x = s.lowercased().folding(options: .diacriticInsensitive, locale: nil).filter { $0.isLetter || $0.isNumber }
+                if x.hasSuffix("s") { x.removeLast() }
+                return x
+            }
+            var found: [String: [String]] = [:]
+            for c in cats {
+                let cn = norm(c.name)
+                let mine = collectibles.filter { let m = norm($0.name); return m == cn || (m.count > 4 && (m.contains(cn) || cn.contains(m))) }
+                let names = mine.flatMap { $0.items.map(\.name) }
+                if !names.isEmpty { found[c.id] = names }
+            }
+            let cfg: [String: Any] = [
+                "on": on,
+                "labels": labels.map { ["kind": $0.kind, "sub": $0.sub ?? "", "t": $0.t, "lat": $0.lat, "lng": $0.lng] },
+                "cats": cats.map { ["id": $0.id, "name": $0.name] },
+                "found": found,
+            ]
+            guard let d = try? JSONSerialization.data(withJSONObject: cfg), let json = String(data: d, encoding: .utf8) else { return }
+            pendingZones = json
+            if ready { _ = try? await webView.evaluateJavaScript("window.pkSetZones && window.pkSetZones(\(json))") }
+        }
+    }
+
+    private var pendingRoute: String?
+    func setRoute(_ stops: [String]) {
+        let json = String(data: (try? JSONSerialization.data(withJSONObject: stops)) ?? Data("[]".utf8), encoding: .utf8) ?? "[]"
+        pendingRoute = json
+        if ready { webView.evaluateJavaScript("window.pkSetRoute && window.pkSetRoute(\(json))") }
+    }
+    func fitRoute() { webView.evaluateJavaScript("window.pkFitRoute && window.pkFitRoute()") }
+
     func categories() async -> [PlaceCategory] {
         guard ready else { return [] }
         let r = try? await webView.callAsyncJavaScript("return JSON.stringify(window.pkCategories ? window.pkCategories() : [])", arguments: [:], contentWorld: .page)
@@ -205,6 +249,8 @@ final class MapWeb: NSObject, ObservableObject, WKScriptMessageHandler, WKNaviga
             webView.evaluateJavaScript("window.pkSetPins && window.pkSetPins(\(pendingPins))")
             webView.evaluateJavaScript("window.pkSetPlaces && window.pkSetPlaces(\(pendingPlaces))")
             webView.evaluateJavaScript("window.pkSetPlaceCats && window.pkSetPlaceCats(\(pendingCats))")
+            if let z = pendingZones { webView.evaluateJavaScript("window.pkSetZones && window.pkSetZones(\(z))") }
+            if let r = pendingRoute { webView.evaluateJavaScript("window.pkSetRoute && window.pkSetRoute(\(r))") }
         case "error":
             if offlineMode { failed = true } else { loadFromCache() }
         case "longPress":
@@ -217,6 +263,10 @@ final class MapWeb: NSObject, ObservableObject, WKScriptMessageHandler, WKNaviga
             onPlaceTap?(GamePlace(name: d["name"] as? String ?? "", category: d["cat"] as? String ?? "",
                                   lat: d["lat"] as? Double ?? 0, lng: d["lng"] as? Double ?? 0,
                                   place: near?["place"] as? String, county: near?["county"] as? String))
+        case "zoneTap":
+            let by = (d["byCat"] as? [[String: Any]] ?? []).map { ZoneCat(cat: $0["cat"] as? String ?? "", found: $0["found"] as? Int ?? 0, total: $0["total"] as? Int ?? 0) }
+            UIImpactFeedbackGenerator(style: .light).impactOccurred()
+            onZoneTap?(ZoneInfo(name: d["name"] as? String ?? "", level: d["level"] as? String ?? "", found: d["found"] as? Int ?? 0, total: d["total"] as? Int ?? 0, byCat: by))
         case "pinTap":
             if let s = d["id"] as? String, let id = UUID(uuidString: s) {
                 UIImpactFeedbackGenerator(style: .light).impactOccurred()
@@ -273,6 +323,8 @@ struct MapaView: View {
     @State private var showOffline = false
     @State private var showHint = false
     @State private var tappedPlace: GamePlace?
+    @AppStorage("pk.zones.on") private var zonesOn = false
+    @State private var tappedZone: MapWeb.ZoneInfo?
 
     var body: some View {
         let t = settings.t
@@ -324,6 +376,12 @@ struct MapaView: View {
                         .accessibilityLabel(t.s("Lista de pines", "Pin list"))
                 }
                 ToolbarItem(placement: .primaryAction) {
+                    Button { zonesOn.toggle(); UISelectionFeedbackGenerator().selectionChanged() } label: {
+                        Image(systemName: zonesOn ? "square.grid.3x3.fill" : "square.grid.3x3")
+                    }
+                    .accessibilityLabel(t.s("Coleccionables por zona", "Collectibles by zone"))
+                }
+                ToolbarItem(placement: .primaryAction) {
                     Button { showPlaces = true } label: { Image(systemName: "mappin.and.ellipse") }
                         .accessibilityLabel(t.s("Lugares del juego", "Game places"))
                 }
@@ -343,6 +401,9 @@ struct MapaView: View {
                     editing = p
                 }
                 map.onPlaceTap = { p in tappedPlace = p }
+                map.onZoneTap = { z in tappedZone = z }
+                map.setZones(on: zonesOn, collectibles: store.data.collectibles)
+                map.setRoute(store.data.route?.stops ?? [])
                 map.onPinTap = { id in
                     if let p = store.data.pins.first(where: { $0.id == id }) { editingNear = (nil, nil); editing = p }
                 }
@@ -351,6 +412,36 @@ struct MapaView: View {
             .onChange(of: store.data.pins) { _, _ in pushPins() }
             .onChange(of: store.data.places) { _, _ in map.setPlaces(store.data.places) }
             .onChange(of: store.data.placeCats) { _, _ in map.setPlaceCats(store.data.placeCats) }
+            .onChange(of: zonesOn) { _, on in map.setZones(on: on, collectibles: store.data.collectibles) }
+            .onChange(of: store.data.route) { _, r in map.setRoute(r?.stops ?? []); if r != nil { DispatchQueue.main.asyncAfter(deadline: .now() + 0.4) { map.fitRoute() } } }
+            .overlay(alignment: .bottom) {
+                if let r = store.data.route {
+                    HStack(spacing: 10) {
+                        Button { map.fitRoute() } label: {
+                            HStack(spacing: 8) {
+                                Text("🛣️")
+                                VStack(alignment: .leading, spacing: 1) {
+                                    Text(r.title).font(Theme.text(14, .semibold)).foregroundStyle(.white).lineLimit(1)
+                                    Text("\(r.stops.count) \(t.s("paradas", "stops"))").font(Theme.text(11)).foregroundStyle(Theme.lilac)
+                                }
+                            }
+                        }
+                        .buttonStyle(.plain)
+                        Button { store.clearRoute() } label: { Image(systemName: "xmark.circle.fill").font(.system(size: 20)).foregroundStyle(Theme.lilac) }
+                            .accessibilityLabel(t.s("Quitar ruta", "Clear route"))
+                    }
+                    .padding(.horizontal, 14).padding(.vertical, 9)
+                    .background(Capsule().fill(.ultraThinMaterial))
+                    .background(Capsule().fill(Theme.nightDeep.opacity(0.55)))
+                    .overlay(Capsule().stroke(Theme.switchPink.opacity(0.6), lineWidth: 1.2))
+                    .padding(.bottom, 14)
+                }
+            }
+            .onChange(of: store.data.collectibles) { _, c in if zonesOn { map.setZones(on: true, collectibles: c) } }
+            .onChange(of: map.ready) { _, r in if r { map.setZones(on: zonesOn, collectibles: store.data.collectibles) } }
+            .sheet(item: $tappedZone) { z in
+                ZoneSheet(zone: z).environmentObject(settings).presentationDetents([.medium, .large])
+            }
             .onChange(of: filter) { _, _ in pushPins() }
             .onChange(of: map.ready) { _, _ in pushPins() }
             .sheet(item: $editing) { pin in
@@ -586,6 +677,12 @@ struct PlaceCategory: Identifiable, Hashable {
     let name: String
     let group: String
     let count: Int
+    /// Lo que cuenta en "coleccionables por zona".
+    var isCollectible: Bool {
+        let g = group.lowercased(), i = id.lowercased()
+        return g.contains("collect") || i.hasPrefix("card-") || ["hidden-package", "treasure", "meteorite", "message-bottle", "magazine", "playlist",
+                "waink-curiosity", "waink-landmark", "waink-sculpture", "meditation", "ahol-street-art", "mural", "luxury-watch"].contains(i)
+    }
     /// Coleccionables y cosas escondidas: mostrarlas completas sería spoiler.
     var isSecret: Bool {
         let g = group.lowercased(), i = id.lowercased()
@@ -743,6 +840,48 @@ struct PlaceSheet: View {
             web.send(msg)
             asking = false
             close()
+        }
+    }
+}
+
+
+/// Detalle de una zona: cuántos coleccionables llevás de cada tipo (solo números, sin ubicaciones).
+struct ZoneSheet: View {
+    @EnvironmentObject private var settings: AppSettings
+    @Environment(\.dismiss) private var dismiss
+    let zone: MapWeb.ZoneInfo
+    var body: some View {
+        let t = settings.t
+        NavigationStack {
+            List {
+                Section {
+                    HStack {
+                        Text(t.s("Total", "Total")).font(Theme.text(16, .semibold)).foregroundStyle(.white)
+                        Spacer()
+                        Text("\(zone.found) / \(zone.total)").font(Theme.display(22)).foregroundStyle(zone.found >= zone.total && zone.total > 0 ? Color(red: 0.18, green: 0.9, blue: 0.66) : Theme.switchPink)
+                    }
+                    .menuRow()
+                }
+                Section {
+                    ForEach(zone.byCat, id: \.self) { c in
+                        HStack {
+                            Text(c.cat).font(Theme.text(15)).foregroundStyle(.white)
+                            Spacer()
+                            Text("\(c.found) / \(c.total)").font(Theme.text(15, .semibold)).foregroundStyle(c.found >= c.total ? Color(red: 0.18, green: 0.9, blue: 0.66) : Theme.lilac)
+                        }
+                        .menuRow()
+                    }
+                } footer: {
+                    Text(t.s("Cuentan los que anotaste con su nombre. Los que guardaste solo como número no se pueden ubicar en una zona.",
+                             "Only collectibles saved by name count here. Ones saved just as a number can't be placed in a zone."))
+                        .font(Theme.text(12, relativeTo: .caption)).foregroundStyle(Theme.lilac.opacity(0.85))
+                }
+            }
+            .scrollContentBackground(.hidden)
+            .background(Theme.menu.ignoresSafeArea())
+            .navigationTitle(zone.name)
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar { ToolbarItem(placement: .confirmationAction) { Button("OK") { dismiss() } } }
         }
     }
 }

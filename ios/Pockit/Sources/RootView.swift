@@ -226,7 +226,8 @@ struct TopBar: View {
                 Spacer()
                 GlassCircleButton(systemName: state.spoilersOn ? "eye.fill" : "eye.slash.fill",
                                   label: state.spoilersOn ? t.spoilersOn : t.spoilersOff,
-                                  tint: state.spoilersOn ? Theme.sunset : .white) { confirmSpoilers = true }
+                                  tint: state.spoilersOn ? Theme.sunset : .white,
+                                  assetName: (settings.tabIconStyle == .game ? "Glyph_spoiler_" : "Color_spoiler_") + (state.spoilersOn ? "on" : "off")) { confirmSpoilers = true }
                 GlassCircleButton(systemName: "gearshape.fill", label: t.settings,
                                   assetName: settings.tabIconStyle == .game ? "Glyph_settings" : "Color_settings", action: onSettings)
             }
@@ -284,7 +285,7 @@ struct GlassCircleButton: View {
                 if let assetName {
                     // los íconos "Color_" van con sus colores; los "Glyph_" se pintan del color del botón
                     Image(assetName).renderingMode(assetName.hasPrefix("Color_") ? .original : .template)
-                        .resizable().scaledToFit().frame(width: assetName.hasPrefix("Color_") ? 26 : 21, height: assetName.hasPrefix("Color_") ? 26 : 21)
+                        .resizable().scaledToFit().frame(width: assetName.hasPrefix("Color_") ? 28 : 24, height: assetName.hasPrefix("Color_") ? 28 : 24)
                 } else {
                     Image(systemName: systemName).font(.system(size: 17, weight: .semibold))
                 }

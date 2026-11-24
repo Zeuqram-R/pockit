@@ -213,6 +213,7 @@ final class SyncManager: ObservableObject {
         m.places = us(local.places, remote.places)
         m.placeCats = us(local.placeCats, remote.placeCats)
         m.buckmeTier = local.updatedAt > remote.updatedAt ? local.buckmeTier : remote.buckmeTier
+        m.route = local.updatedAt > remote.updatedAt ? local.route : remote.route
         // Coleccionables: por categoría, se juntan los ítems encontrados
         var cats = remote.collectibles
         for lc in local.collectibles {

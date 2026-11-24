@@ -11,3 +11,4 @@
 | stash | Cuadro STASH (de la imagen de Jose), el anillo lo dibuja la app | `Icon_stash` (en uso) |
 | tier_regular/silver/gold/premium | Niveles de BuckMe | `Tier_*` (en uso) |
 | ajustes_color | Botón de Ajustes a color (morado, rosa, azul) | `Color_settings` (en uso) |
+| final_spoiler_off/on, glyph_spoiler_off/on | Botón de spoilers (gafas redondas): a color y estilo juego | `Color_spoiler_*`, `Glyph_spoiler_*` (en uso) |

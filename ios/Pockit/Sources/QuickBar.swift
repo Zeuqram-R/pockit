@@ -9,12 +9,27 @@ struct QuickBar: View {
     @State private var showProgress = false
     @ObservedObject private var inbox = IntentInbox.shared
 
+    @EnvironmentObject private var store: PockitStore
+
+    /// Pide a Marisol una ruta de ~1 hora solo con lo desbloqueado, y la etiqueta pa' dibujarla en el mapa.
+    private func routePrompt(_ t: L10n) -> String {
+        let known = store.data.places.suffix(60).joined(separator: ", ")
+        let es = "🛣️ Ruta del día: armame una ruta de más o menos 1 hora, solo con lugares y zonas que ya desbloqueé (nada de spoilers). Mezclá lo que valga la pena: actividades, plata, side missions, tiendas, fotos o atardeceres, y coleccionables que me falten solo como pista, nunca la ubicación exacta. Si no sabés dónde estoy, preguntame primero."
+            + (known.isEmpty ? "" : " Lugares que ya tengo en el mapa: \(known).")
+            + " Al final poné la ruta para el mapa en una línea: ⟦pockit route title=\"…\" stops=\"Lugar 1|Lugar 2|…\"⟧ con los nombres exactos de los lugares, en orden."
+        let en = "🛣️ Day route: build me a route of about 1 hour using only places and areas I've already unlocked (no spoilers). Mix what's worth it: activities, money, side missions, shops, photos or sunsets, and collectibles I'm missing only as hints, never the exact location. If you don't know where I am, ask me first."
+            + (known.isEmpty ? "" : " Places already on my map: \(known).")
+            + " At the end put the route for the map on one line: ⟦pockit route title=\"…\" stops=\"Place 1|Place 2|…\"⟧ with the exact place names, in order."
+        return t.s(es, en)
+    }
+
     var body: some View {
         let t = settings.t
         ScrollView(.horizontal, showsIndicators: false) {
             HStack(spacing: 8) {
                 chip("📍 " + t.qProgress, color: Theme.pink) { showProgress = true }
                 chip(t.qWhatNow, color: Theme.coral) { web.send(t.msgWhatNow) }
+                chip("🛣️ " + t.s("Ruta del día", "Day route"), color: Theme.sunset) { web.send(routePrompt(t)) }
                 chip("🎮 " + t.s("Terminé", "Done playing"), color: Theme.teal) { inbox.showEndSession = true }
                 // Solo aparecen cuando Marisol está dando pistas de un secreto.
                 if state.hintsOpen {

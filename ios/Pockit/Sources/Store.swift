@@ -202,6 +202,8 @@ struct PockitData: Codable {
     var places: [String] = []
     /// Categorías del mapa que se muestran completas (ej. gasolineras).
     var placeCats: [String] = []
+    /// Ruta del día que armó Marisol (se dibuja en el mapa).
+    var route: DayRoute?
     /// Nivel de BuckMe (regular, silver, gold, premium): pone los límites de los anillos.
     var buckmeTier = "regular"
     var updatedAt = Date()
@@ -232,6 +234,7 @@ struct PockitData: Codable {
         places = try c.decodeIfPresent([String].self, forKey: .places) ?? []
         placeCats = try c.decodeIfPresent([String].self, forKey: .placeCats) ?? []
         buckmeTier = try c.decodeIfPresent(String.self, forKey: .buckmeTier) ?? "regular"
+        route = try c.decodeIfPresent(DayRoute.self, forKey: .route)
         updatedAt = try c.decodeIfPresent(Date.self, forKey: .updatedAt) ?? Date()
     }
 }
@@ -541,6 +544,12 @@ final class PockitStore: ObservableObject {
             if let item = tag["item"] { announce("🎯", lang: item) }
             return
         }
+        if type == "route", let st = tag["stops"], !st.isEmpty {
+            let stops = st.split(separator: "|").map { String($0).trimmingCharacters(in: .whitespaces) }.filter { !$0.isEmpty }
+            mutate { $0.route = DayRoute(title: tag["title"] ?? L10n.current.s("Ruta del día", "Route of the day"), stops: stops, createdAt: date) }
+            announce("🛣️", lang: L10n.current.s("Ruta en tu mapa: ", "Route on your map: ") + "\(stops.count) " + L10n.current.s("paradas", "stops"))
+            return
+        }
         if type == "place", let n = tag["name"], !n.isEmpty {
             for one in n.split(separator: "|").map({ String($0).trimmingCharacters(in: .whitespaces) }) where addPlace(one) {
                 announce("🗺️", lang: L10n.current.s("En tu mapa: ", "On your map: ") + one)
@@ -734,6 +743,8 @@ final class PockitStore: ObservableObject {
         syncBuckmeTotal()
     }
 
+    func clearRoute() { mutate { $0.route = nil } }
+
     func setBuckmeTier(_ tier: BuckmeTier) {
         mutate { $0.buckmeTier = tier.rawValue }
     }
@@ -833,4 +844,11 @@ enum Fmt {
         f.unitsStyle = .short
         return f.localizedString(for: d, relativeTo: Date())
     }
+}
+
+
+struct DayRoute: Codable, Hashable {
+    var title: String
+    var stops: [String]
+    var createdAt = Date()
 }
