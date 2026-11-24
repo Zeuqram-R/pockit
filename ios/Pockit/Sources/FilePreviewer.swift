@@ -4,9 +4,10 @@ import WebKit
 
 /// Abre fotos y archivos del chat en pantalla completa (vista nativa de iOS, con botón de compartir/guardar).
 @MainActor
-final class FilePreviewer: NSObject, QLPreviewControllerDataSource {
+final class FilePreviewer: NSObject, QLPreviewControllerDataSource, UIGestureRecognizerDelegate {
     static let shared = FilePreviewer()
     private var items: [URL] = []
+    private weak var shown: QLPreviewController?
 
     func show(_ url: URL) {
         items = [url]
@@ -15,7 +16,52 @@ final class FilePreviewer: NSObject, QLPreviewControllerDataSource {
         ql.modalPresentationStyle = .fullScreen
         guard let top = Self.topController() else { return }
         top.present(ql, animated: true)
+        shown = ql
+        // 0.8.2: deslizar hacia el centro (arriba o abajo) la cierra, siguiendo el dedo
+        let pan = UIPanGestureRecognizer(target: self, action: #selector(panned(_:)))
+        pan.delegate = self
+        ql.view.addGestureRecognizer(pan)
     }
+
+    @objc private func panned(_ g: UIPanGestureRecognizer) {
+        guard let v = shown?.view else { return }
+        let ty = g.translation(in: v).y
+        let progress = min(1, abs(ty) / 300)
+        switch g.state {
+        case .changed:
+            v.transform = CGAffineTransform(translationX: 0, y: ty).scaledBy(x: 1 - progress * 0.12, y: 1 - progress * 0.12)
+            v.alpha = 1 - progress * 0.5
+        case .ended, .cancelled:
+            let vy = g.velocity(in: v).y
+            if abs(ty) > 110 || abs(vy) > 900 {
+                UIView.animate(withDuration: 0.22, animations: {
+                    v.transform = CGAffineTransform(translationX: 0, y: ty > 0 ? v.bounds.height : -v.bounds.height)
+                    v.alpha = 0
+                }, completion: { _ in self.shown?.dismiss(animated: false) })
+            } else {
+                UIView.animate(withDuration: 0.35, delay: 0, usingSpringWithDamping: 0.75, initialSpringVelocity: 0) {
+                    v.transform = .identity; v.alpha = 1
+                }
+            }
+        default: break
+        }
+    }
+
+    /// Solo arranca si el gesto es vertical (pa' no pelear con el zoom ni con pasar de página).
+    nonisolated func gestureRecognizerShouldBegin(_ g: UIGestureRecognizer) -> Bool {
+        MainActor.assumeIsolated {
+            guard let p = g as? UIPanGestureRecognizer, let v = p.view else { return true }
+            let vel = p.velocity(in: v)
+            if abs(vel.y) <= abs(vel.x) * 1.2 { return false }
+            // si la foto está con zoom, el pellizco/arrastre es de la foto
+            func zoomed(_ view: UIView) -> Bool {
+                if let sc = view as? UIScrollView, sc.zoomScale > sc.minimumZoomScale + 0.01 { return true }
+                return view.subviews.contains { zoomed($0) }
+            }
+            return !zoomed(v)
+        }
+    }
+    nonisolated func gestureRecognizer(_ g: UIGestureRecognizer, shouldRecognizeSimultaneouslyWith other: UIGestureRecognizer) -> Bool { false }
 
     /// Guarda bytes que mandó el chat (base64) en un archivo temporal y lo abre.
     func show(base64: String, name: String, mime: String) {

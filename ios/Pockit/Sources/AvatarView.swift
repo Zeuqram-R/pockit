@@ -14,12 +14,12 @@ struct AvatarView: View {
     @State private var breathe = false
 
     var body: some View {
-        // 0.7.0: solo su cara (recortada, sin círculo ni atardecer). 0.7.1: 33% menos zoom.
+        // 0.7.0: solo su cara (recortada, sin círculo ni atardecer). 0.8.2: recorte más amplio (se ve el pelo) y 40% menos zoom.
         Image(uiImage: face.frame)
             .resizable()
             .interpolation(.high)
             .scaledToFit()
-            .frame(width: size * 0.8, height: size * 0.8)
+            .frame(width: size * 0.55, height: size * 0.55)
             .shadow(color: .black.opacity(0.35), radius: 6, y: 3)
             .scaleEffect(breathe ? 1.02 : 1.0)
             .frame(width: size, height: size)
