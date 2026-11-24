@@ -88,7 +88,8 @@ final class ProjectChats: ObservableObject {
         let isPlaceholder = clean.isEmpty || clean == "Claude" || clean.lowercased().hasPrefix("new chat") || clean.lowercased().hasPrefix("nueva")
         if let i = chats.firstIndex(where: { $0.chatID == chatID }) {
             var c = chats.remove(at: i)
-            if !isPlaceholder { c.title = clean }
+            let takenByOther = chats.contains { $0.title == clean }
+            if !isPlaceholder && !(c.title == "…" && takenByOther) { c.title = clean }
             c.lastSeen = Date()
             chats.insert(c, at: 0)
         } else if let i = chats.firstIndex(where: { $0.chatID.isEmpty && !isPlaceholder && $0.title == clean }) {
@@ -97,8 +98,18 @@ final class ProjectChats: ObservableObject {
             c.lastSeen = Date()
             chats.insert(c, at: 0)
         } else {
-            chats.insert(ProjectChat(chatID: chatID, title: isPlaceholder ? "…" : clean, when: ""), at: 0)
+            // 0.7.12: al abrir una conversación nueva, la página todavía tiene el título de la anterior por un momento;
+            // eso creaba un duplicado. Si el título ya lo tiene otra conversación, se espera al nombre de verdad.
+            let taken = chats.contains { $0.title == clean }
+            chats.insert(ProjectChat(chatID: chatID, title: (isPlaceholder || taken) ? "…" : clean, when: ""), at: 0)
         }
+        save()
+    }
+
+    /// claude.ai dijo que esa conversación no existe: se quita de la lista.
+    func missing(chatID: String) {
+        guard !chatID.isEmpty else { return }
+        chats.removeAll { $0.chatID == chatID }
         save()
     }
 }
@@ -201,7 +212,7 @@ struct ChatsDrawer: View {
                             VStack(alignment: .leading, spacing: 2) {
                                 HStack(spacing: 6) {
                                     if chat.pinned == true { Image(systemName: "pin.fill").font(.system(size: 10, weight: .bold)).foregroundStyle(Theme.switchPink) }
-                                    Text(chat.title).font(Theme.text(15, current ? .semibold : .regular)).foregroundStyle(.white).lineLimit(2)
+                                    Text(chat.title == "…" ? t.s("Nueva conversación", "New chat") : chat.title).font(Theme.text(15, current ? .semibold : .regular)).foregroundStyle(.white).lineLimit(2)
                                 }
                                 if !chat.when.isEmpty {
                                     Text(chat.when).font(Theme.text(11, relativeTo: .caption2)).foregroundStyle(Theme.lilac.opacity(0.85))
@@ -270,12 +281,19 @@ struct ChatsDrawer: View {
         Task {
             let r = await web.chatAction(action, chatID: chat.chatID, newTitle: title)
             busy = false
+            if action == .delete {
+                // 0.7.12: se quita de la lista siempre (si claude.ai ya no la tenía, igual sobraba)
+                chats.remove(chat)
+                web.open(path: WebModel.projectURL.path)
+                UINotificationFeedbackGenerator().notificationOccurred(.success)
+                if r != "ok" { errorText = t.s("La quité de la lista. En claude.ai no encontré cómo borrarla (\(r)); si todavía existe allá, borrala desde claude.ai.", "Removed it from the list. Couldn't delete it on claude.ai (\(r)); if it still exists there, delete it from claude.ai.") }
+                return
+            }
             if r == "ok" {
                 UINotificationFeedbackGenerator().notificationOccurred(.success)
                 switch action {
                 case .rename: chats.rename(chat, to: title)
-                case .delete: chats.remove(chat); web.open(path: WebModel.projectURL.path)
-                case .star: break
+                case .delete, .star: break
                 }
                 isOpen = false
             } else {

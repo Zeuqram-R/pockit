@@ -160,6 +160,7 @@ struct RootView: View {
             web.onTags = { items in state.handle(items: items) }
             web.onProjectChats = { items in chats.ingestFromProjectPage(items) }
             web.onChatVisited = { id, title in chats.visited(chatID: id, title: title) }
+            web.onChatMissing = { id in chats.missing(chatID: id) }
             web.setPrefix(state.prefix(lang: settings.language))
             skin.attach(web)
         }

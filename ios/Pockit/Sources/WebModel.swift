@@ -57,6 +57,7 @@ final class WebModel: NSObject, ObservableObject {
     /// Lista de conversaciones del proyecto leída por chat.js.
     var onProjectChats: (@MainActor ([[String: Any]]) -> Void)?
     /// Se abrió una conversación (id, título de la pestaña).
+    var onChatMissing: ((String) -> Void)?
     var onChatVisited: (@MainActor (String, String?) -> Void)?
     private var titleObservation: NSKeyValueObservation?
     private var prefix = ""
@@ -386,6 +387,8 @@ final class WebModel: NSObject, ObservableObject {
         case "streaming":
             isStreaming = (dict["on"] as? Bool) ?? false
             if isStreaming && pendingFirstMessage != nil { pendingSawStreaming = true }
+        case "chatMissing":
+            if let id = dict["chatID"] as? String { onChatMissing?(id) }
         case "usageBanner":
             if let pct = dict["pct"] as? Int { UsageMonitor.shared.fromBanner(kind: dict["kind"] as? String ?? "weekly", pct: pct) }
         case "dotsDocked":
