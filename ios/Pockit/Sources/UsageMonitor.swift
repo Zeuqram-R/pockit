@@ -17,6 +17,7 @@ final class UsageMonitor: NSObject, ObservableObject, WKNavigationDelegate {
     private var web: WKWebView?
     private var timer: Timer?
     private var loading = false
+    private var polling = false
     private var lastLoad = Date.distantPast
     private let url = URL(string: "https://claude.ai/settings/usage")!
 
@@ -48,6 +49,12 @@ final class UsageMonitor: NSObject, ObservableObject, WKNavigationDelegate {
         lastLoad = Date()
         let wv = web ?? makeWeb()
         wv.load(URLRequest(url: url, cachePolicy: .reloadIgnoringLocalCacheData, timeoutInterval: 25))
+        let started = lastLoad
+        DispatchQueue.main.asyncAfter(deadline: .now() + 40) { [weak self] in
+            guard let self, self.loading, self.lastLoad == started else { return }
+            if self.lastText.isEmpty || !self.polling { self.lastText = "Se pasó el tiempo en " + (self.web?.url?.absoluteString ?? "?") }
+            self.finish()
+        }
     }
 
     private func makeWeb() -> WKWebView {
@@ -70,18 +77,25 @@ final class UsageMonitor: NSObject, ObservableObject, WKNavigationDelegate {
     }
 
     nonisolated func webView(_ webView: WKWebView, didFinish navigation: WKNavigation!) {
-        Task { @MainActor in self.poll(tries: 0) }
+        Task { @MainActor in
+            // 0.7.9: la página en blanco con que se suelta todo también "termina de cargar"; esa no se lee
+            guard self.loading, webView.url?.host?.contains("claude.ai") == true, !self.polling else { return }
+            self.polling = true
+            self.poll(tries: 0)
+        }
     }
     nonisolated func webView(_ webView: WKWebView, didFail navigation: WKNavigation!, withError error: Error) {
-        Task { @MainActor in self.loading = false }
+        let msg = error.localizedDescription
+        Task { @MainActor in if self.loading && !self.polling { self.lastText = "No cargó: " + msg; self.loading = false } }
     }
     nonisolated func webView(_ webView: WKWebView, didFailProvisionalNavigation navigation: WKNavigation!, withError error: Error) {
-        Task { @MainActor in self.loading = false }
+        let msg = error.localizedDescription
+        Task { @MainActor in if self.loading && !self.polling { self.lastText = "No cargó: " + msg; self.loading = false } }
     }
 
     /// La página arma su contenido después de cargar; se revisa cada segundo hasta 15 s.
     private func poll(tries: Int) {
-        guard let web else { loading = false; return }
+        guard let web, loading else { polling = false; loading = false; return }
         web.evaluateJavaScript(Self.readJS) { [weak self] result, _ in
             Task { @MainActor in
                 guard let self else { return }
@@ -90,7 +104,7 @@ final class UsageMonitor: NSObject, ObservableObject, WKNavigationDelegate {
                 if obj["login"] as? Bool == true { self.problem = "login"; self.finish(); return }
                 let s = obj["s"] as? Int, w = obj["w"] as? Int
                 if let txt = obj["txt"] as? String, !txt.isEmpty { self.lastText = txt }
-                if let away = obj["away"] as? String { self.lastText = "La página de Uso me mandó a: " + away }
+                if let away = obj["away"] as? String { self.lastText = "La página de Uso me mandó a: " + away + " (" + (web.url?.absoluteString ?? "?") + ")" }
                 if s != nil || w != nil {
                     if let s { self.session = s }
                     if let w { self.weekly = w }
@@ -101,6 +115,7 @@ final class UsageMonitor: NSObject, ObservableObject, WKNavigationDelegate {
                     DispatchQueue.main.asyncAfter(deadline: .now() + 1) { self.poll(tries: tries + 1) }
                 } else {
                     self.problem = "parse"
+                    if self.lastText.isEmpty { self.lastText = "Sin texto en " + (web.url?.absoluteString ?? "?") }
                     self.finish()
                 }
             }
@@ -109,6 +124,7 @@ final class UsageMonitor: NSObject, ObservableObject, WKNavigationDelegate {
 
     private func finish() {
         loading = false
+        polling = false
         web?.loadHTMLString("", baseURL: nil)   // suelta la página pa' no gastar batería
     }
 
