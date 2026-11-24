@@ -108,6 +108,7 @@
     const c = composer();
     if (!c) { post({ type: "sendResult", ok: false, reason: "no-composer" }); return false; }
     const full = prefix() + text;
+    try { window.pockitMarkSend && window.pockitMarkSend(); } catch (e) {}
     try {
       if (c.tagName === "TEXTAREA") {
         setTextareaValue(c, full);
