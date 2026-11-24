@@ -6,3 +6,4 @@
 |---|---|---|
 | settings_sliders | Botón de Ajustes, estilo del juego | `Glyph_settings` (en uso) |
 | wallet_color | Efectivo / billetera, a color | `Res_wallet` (guardado, todavía sin usar) |
+| bank_app | Cuadro de BUCKME en Portfolio › Money (propio, no es el logo del juego) | `Glyph_bankapp` (en uso) |

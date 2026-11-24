@@ -7,6 +7,7 @@ struct ProjectChat: Identifiable, Hashable, Codable {
     var title: String
     var when: String    // "Hace 2 minutos", tal como lo muestra claude.ai
     var lastSeen = Date()
+    var pinned: Bool? = nil
     var path: String { "/chat/\(chatID)" }
 }
 
@@ -62,6 +63,21 @@ final class ProjectChats: ObservableObject {
         save()
     }
 
+    func togglePin(_ chat: ProjectChat) {
+        guard let i = chats.firstIndex(where: { $0.id == chat.id }) else { return }
+        chats[i].pinned = !(chats[i].pinned ?? false)
+        save()
+    }
+    func rename(_ chat: ProjectChat, to title: String) {
+        guard let i = chats.firstIndex(where: { $0.id == chat.id }) else { return }
+        chats[i].title = title
+        save()
+    }
+    func remove(_ chat: ProjectChat) {
+        chats.removeAll { $0.id == chat.id }
+        save()
+    }
+
     /// Cada vez que se abre una conversación en Pockit (todas son del proyecto: no hay otra forma de llegar).
     func visited(chatID: String, title: String?) {
         guard chatID.count >= 20 else { return }
@@ -95,6 +111,11 @@ struct ChatsDrawer: View {
     @EnvironmentObject private var chats: ProjectChats
     @State private var query = ""
     @GestureState private var drag: CGFloat = 0
+    @State private var renaming: ProjectChat?
+    @State private var newTitle = ""
+    @State private var deleting: ProjectChat?
+    @State private var busy = false
+    @State private var errorText: String?
 
     var body: some View {
         GeometryReader { geo in
@@ -123,7 +144,8 @@ struct ChatsDrawer: View {
 
     private func panel(width: CGFloat) -> some View {
         let t = settings.t
-        let list = chats.chats.filter { query.isEmpty || $0.title.localizedCaseInsensitiveContains(query) }
+        let found = chats.chats.filter { query.isEmpty || $0.title.localizedCaseInsensitiveContains(query) }
+        let list = found.filter { $0.pinned == true } + found.filter { $0.pinned != true }
         return VStack(alignment: .leading, spacing: 0) {
             VStack(alignment: .leading, spacing: 2) {
                 Text(t.s("CONVERSACIONES", "CHATS")).font(Theme.display(28)).foregroundStyle(.white)
@@ -177,7 +199,10 @@ struct ChatsDrawer: View {
                             isOpen = false
                         } label: {
                             VStack(alignment: .leading, spacing: 2) {
-                                Text(chat.title).font(Theme.text(15, current ? .semibold : .regular)).foregroundStyle(.white).lineLimit(2)
+                                HStack(spacing: 6) {
+                                    if chat.pinned == true { Image(systemName: "pin.fill").font(.system(size: 10, weight: .bold)).foregroundStyle(Theme.switchPink) }
+                                    Text(chat.title).font(Theme.text(15, current ? .semibold : .regular)).foregroundStyle(.white).lineLimit(2)
+                                }
                                 if !chat.when.isEmpty {
                                     Text(chat.when).font(Theme.text(11, relativeTo: .caption2)).foregroundStyle(Theme.lilac.opacity(0.85))
                                 }
@@ -191,6 +216,7 @@ struct ChatsDrawer: View {
                             }
                         }
                         .buttonStyle(.plain)
+                        .contextMenu { chatMenu(chat) }
                     }
                 }
                 .padding(.horizontal, 8)
@@ -202,5 +228,59 @@ struct ChatsDrawer: View {
         .background(Theme.menu.ignoresSafeArea())
         .overlay(alignment: .trailing) { Rectangle().fill(Theme.line).frame(width: 1).ignoresSafeArea() }
         .shadow(color: .black.opacity(0.35), radius: 18, x: 6)
+        .overlay { if busy { ProgressView().tint(Theme.switchPink).padding(18).background(Circle().fill(Theme.nightDeep.opacity(0.85))) } }
+        .alert(t.s("Cambiar nombre", "Rename"), isPresented: Binding(get: { renaming != nil }, set: { if !$0 { renaming = nil } })) {
+            TextField(t.s("Nombre", "Name"), text: $newTitle)
+            Button(t.cancel, role: .cancel) { renaming = nil }
+            Button(t.s("Guardar", "Save")) {
+                if let c = renaming { run(.rename, c, title: newTitle.trimmingCharacters(in: .whitespaces)) }
+                renaming = nil
+            }
+        }
+        .confirmationDialog(t.s("¿Eliminar esta conversación?", "Delete this chat?"),
+                            isPresented: Binding(get: { deleting != nil }, set: { if !$0 { deleting = nil } }), titleVisibility: .visible) {
+            Button(t.s("Eliminar", "Delete"), role: .destructive) { if let c = deleting { run(.delete, c) }; deleting = nil }
+            Button(t.cancel, role: .cancel) { deleting = nil }
+        } message: {
+            Text(t.s("Se borra también en claude.ai y no se puede deshacer.", "It's also deleted on claude.ai and can't be undone."))
+        }
+        .alert(t.s("No se pudo", "Couldn't do it"), isPresented: Binding(get: { errorText != nil }, set: { if !$0 { errorText = nil } })) {
+            Button("OK") { errorText = nil }
+        } message: { Text(errorText ?? "") }
+    }
+
+    @ViewBuilder private func chatMenu(_ chat: ProjectChat) -> some View {
+        let t = settings.t
+        Button { chats.togglePin(chat) } label: {
+            Label(chat.pinned == true ? t.s("Desfijar", "Unpin") : t.s("Fijar arriba", "Pin to top"), systemImage: chat.pinned == true ? "pin.slash" : "pin")
+        }
+        if !chat.chatID.isEmpty {
+            Button { run(.star, chat) } label: { Label(t.s("Destacar en Claude", "Star in Claude"), systemImage: "star") }
+            Button { newTitle = chat.title; renaming = chat } label: { Label(t.s("Cambiar nombre", "Rename"), systemImage: "pencil") }
+            Button { UIPasteboard.general.string = "https://claude.ai" + chat.path } label: { Label(t.s("Copiar enlace", "Copy link"), systemImage: "link") }
+            Divider()
+            Button(role: .destructive) { deleting = chat } label: { Label(t.s("Eliminar", "Delete"), systemImage: "trash") }
+        }
+    }
+
+    private func run(_ action: WebModel.ChatAction, _ chat: ProjectChat, title: String = "") {
+        guard !chat.chatID.isEmpty, action != .rename || !title.isEmpty else { return }
+        let t = settings.t
+        busy = true
+        Task {
+            let r = await web.chatAction(action, chatID: chat.chatID, newTitle: title)
+            busy = false
+            if r == "ok" {
+                UINotificationFeedbackGenerator().notificationOccurred(.success)
+                switch action {
+                case .rename: chats.rename(chat, to: title)
+                case .delete: chats.remove(chat); web.open(path: WebModel.projectURL.path)
+                case .star: break
+                }
+                isOpen = false
+            } else {
+                errorText = t.s("No encontré esa opción en claude.ai (\(r)). Mandame un video y lo ajusto.", "Couldn't find that option on claude.ai (\(r)). Send me a video and I'll fix it.")
+            }
+        }
     }
 }

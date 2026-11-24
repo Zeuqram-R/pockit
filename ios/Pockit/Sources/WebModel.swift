@@ -174,6 +174,53 @@ final class WebModel: NSObject, ObservableObject {
     }
 
     /// Abre una ruta de claude.ai sin recargar toda la página cuando se puede (navegación interna de la app web).
+    enum ChatAction: String { case star, rename, delete }
+
+    /// Opciones de una conversación (destacar, renombrar, eliminar): abre la conversación y usa el mismo menú
+    /// que claude.ai muestra arriba en el título, como si Jose lo tocara. Devuelve "ok" o qué faltó.
+    func chatAction(_ action: ChatAction, chatID: String, newTitle: String = "") async -> String {
+        let path = "/chat/\(chatID)"
+        if !currentPath.hasPrefix(path) { open(path: path) }
+        let js = """
+        const sleep = ms => new Promise(r => setTimeout(r, ms));
+        async function waitFor(fn, ms) { const t = Date.now(); while (Date.now() - t < ms) { try { const v = fn(); if (v) return v; } catch (e) {} await sleep(150); } return null; }
+        const ok = await waitFor(() => location.pathname.indexOf(chatID) >= 0 && document.querySelector('[data-testid="chat-menu-trigger"], header button[aria-haspopup="menu"]'), 12000);
+        if (!ok) return 'no-trigger';
+        await sleep(400);
+        const trig = document.querySelector('[data-testid="chat-menu-trigger"]') || document.querySelector('header button[aria-haspopup="menu"]');
+        const down = { bubbles: true, cancelable: true, button: 0, pointerType: 'mouse', pointerId: 1, isPrimary: true };
+        trig.dispatchEvent(new PointerEvent('pointerdown', down));
+        trig.dispatchEvent(new PointerEvent('pointerup', down));
+        const res = { star: /^(Destacar|Quitar de destacados|Star|Unstar|Añadir a favoritos|Quitar de favoritos|Favorite|Unfavorite)/i,
+                      rename: /^(Renombrar|Cambiar nombre|Editar nombre|Rename)/i,
+                      delete: /^(Eliminar|Borrar|Delete)/i }[action];
+        let item = await waitFor(() => [...document.querySelectorAll('[role="menuitem"]')].find(m => res.test((m.textContent || '').trim())), 2500);
+        if (!item) { trig.click(); item = await waitFor(() => [...document.querySelectorAll('[role="menuitem"]')].find(m => res.test((m.textContent || '').trim())), 2500); }
+        if (!item) { document.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true })); return 'no-item'; }
+        item.click();
+        if (action === 'rename') {
+          const inp = await waitFor(() => { const a = document.activeElement; if (a && (a.tagName === 'INPUT' || a.tagName === 'TEXTAREA') && !a.closest('.ProseMirror')) return a; return document.querySelector('[role="dialog"] input, [role="dialog"] textarea, header input'); }, 3000);
+          if (!inp) return 'no-input';
+          const proto = inp.tagName === 'TEXTAREA' ? HTMLTextAreaElement.prototype : HTMLInputElement.prototype;
+          Object.getOwnPropertyDescriptor(proto, 'value').set.call(inp, newTitle);
+          inp.dispatchEvent(new Event('input', { bubbles: true }));
+          await sleep(150);
+          const dlg = inp.closest('[role="dialog"]');
+          const save = dlg && [...dlg.querySelectorAll('button')].find(b => /^(Guardar|Save|Renombrar|Rename|Listo|Done)$/i.test((b.textContent || '').trim()));
+          if (save) save.click();
+          else { inp.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', code: 'Enter', keyCode: 13, bubbles: true })); inp.blur(); }
+        }
+        if (action === 'delete') {
+          const btn = await waitFor(() => [...document.querySelectorAll('[role="dialog"] button, [role="alertdialog"] button')].find(b => /^(Eliminar|Borrar|Delete)$/i.test((b.textContent || '').trim())), 3000);
+          if (!btn) return 'no-confirm';
+          btn.click();
+        }
+        return 'ok';
+        """
+        let r = try? await webView.callAsyncJavaScript(js, arguments: ["chatID": chatID, "action": action.rawValue, "newTitle": newTitle], contentWorld: .page)
+        return (r as? String) ?? "error"
+    }
+
     func open(path: String) {
         cancelPendingNewChat()
         loadError = false

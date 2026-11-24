@@ -56,7 +56,7 @@ struct MoneyView: View {
                     HStack(spacing: 10) {
                         MoneyTile(symbol: "building.columns.fill", title: t.s("Banco", "Bank"), value: current?.bank, delta: previous.map { (current?.bank ?? 0) - $0.bank })
                         Button { showBuckme = true } label: {
-                            MoneyTile(symbol: "iphone", title: "BUCKME", value: current?.app, delta: previous.map { (current?.app ?? 0) - $0.app }, showsChevron: true)
+                            MoneyTile(symbol: "iphone", asset: "Glyph_bankapp", title: "BUCKME", value: current?.app, delta: previous.map { (current?.app ?? 0) - $0.app }, showsChevron: true)
                         }
                         .buttonStyle(.plain)
                         .accessibilityHint(t.s("Abre el desglose de BUCKME", "Opens the BUCKME breakdown"))
@@ -207,6 +207,7 @@ struct DeltaText: View {
 
 struct MoneyTile: View {
     let symbol: String
+    var asset: String? = nil
     let title: String
     let value: Int?
     let delta: Int?
@@ -215,7 +216,11 @@ struct MoneyTile: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 6) {
             HStack {
-                Image(systemName: symbol).font(.system(size: 16, weight: .semibold)).foregroundStyle(Theme.switchPink)
+                Group {
+                    if let asset { Image(asset).renderingMode(.template).resizable().scaledToFit().frame(width: 20, height: 20) }
+                    else { Image(systemName: symbol).font(.system(size: 16, weight: .semibold)) }
+                }
+                .foregroundStyle(Theme.switchPink)
                 Spacer()
                 if showsChevron { Image(systemName: "chevron.right").font(.system(size: 12, weight: .bold)).foregroundStyle(Theme.lilac) }
             }
