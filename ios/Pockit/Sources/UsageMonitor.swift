@@ -139,16 +139,16 @@ final class UsageMonitor: NSObject, ObservableObject, WKNavigationDelegate {
     static let readJS = """
     (function(){
       if (/\\/login/.test(location.pathname)) return JSON.stringify({login:true});
-      if (location.pathname.indexOf('/settings/usage') < 0) {
-        if (!window.__pkUsageNav) {
-          window.__pkUsageNav = 1;
-          var a = document.querySelector('a[href*="/settings/usage"]');
-          if (a) a.click(); else { history.pushState({}, '', '/settings/usage'); dispatchEvent(new PopStateEvent('popstate', {state: {}})); }
-        }
-        return JSON.stringify({away: location.pathname});
+      // 0.7.10: claude.ai ahora abre Ajustes como ventana encima del chat (/new#settings/usage)
+      var onUsage = location.pathname.indexOf('/settings/usage') >= 0 || location.hash.indexOf('settings/usage') >= 0;
+      if (!onUsage) {
+        if (!window.__pkUsageNav) { window.__pkUsageNav = 1; location.hash = '#settings/usage'; }
+        return JSON.stringify({away: location.pathname + location.hash});
       }
-      var root = document.querySelector('main') || document.body;
-      var lines = (root.innerText || '').split('\\n').map(function(s){return s.trim();}).filter(Boolean);
+      var dlgs = [].slice.call(document.querySelectorAll('[role="dialog"]')).filter(function(d){ return /%/.test(d.innerText || ''); });
+      var root = dlgs.length ? dlgs[dlgs.length - 1] : document.body;
+      // el aviso del chat ("Has usado 83% de tu límite semanal") no cuenta: no es la página de Uso
+      var lines = (root.innerText || '').split('\\n').map(function(s){return s.trim();}).filter(function(l){ return l && !/has usado|you['’]ve used|you have used|obtener más uso|get more usage/i.test(l); });
       var out = {}, label = '', pcts = [];
       var S = /sesi[oó]n|session|5\\s*h|5 horas|5 hours|l[ií]mite actual|current/i;
       var W = /todos los modelos|all models|seman|week/i;
