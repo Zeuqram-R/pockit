@@ -53,8 +53,10 @@ final class UsageMonitor: NSObject, ObservableObject, WKNavigationDelegate {
     private func makeWeb() -> WKWebView {
         let config = WKWebViewConfiguration()
         config.websiteDataStore = .default()
-        config.defaultWebpagePreferences.preferredContentMode = .mobile
-        let wv = WKWebView(frame: CGRect(x: 0, y: 0, width: 390, height: 800), configuration: config)
+        // 0.7.8: en modo teléfono claude.ai manda Ajustes → Uso a una conversación nueva; en modo compu sí lo abre
+        config.defaultWebpagePreferences.preferredContentMode = .desktop
+        let wv = WKWebView(frame: CGRect(x: 0, y: 0, width: 1280, height: 900), configuration: config)
+        wv.customUserAgent = "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/18.0 Safari/605.1.15"
         wv.navigationDelegate = self
         wv.isUserInteractionEnabled = false
         wv.alpha = 0.01
@@ -88,6 +90,7 @@ final class UsageMonitor: NSObject, ObservableObject, WKNavigationDelegate {
                 if obj["login"] as? Bool == true { self.problem = "login"; self.finish(); return }
                 let s = obj["s"] as? Int, w = obj["w"] as? Int
                 if let txt = obj["txt"] as? String, !txt.isEmpty { self.lastText = txt }
+                if let away = obj["away"] as? String { self.lastText = "La página de Uso me mandó a: " + away }
                 if s != nil || w != nil {
                     if let s { self.session = s }
                     if let w { self.weekly = w }
@@ -120,6 +123,14 @@ final class UsageMonitor: NSObject, ObservableObject, WKNavigationDelegate {
     static let readJS = """
     (function(){
       if (/\\/login/.test(location.pathname)) return JSON.stringify({login:true});
+      if (location.pathname.indexOf('/settings/usage') < 0) {
+        if (!window.__pkUsageNav) {
+          window.__pkUsageNav = 1;
+          var a = document.querySelector('a[href*="/settings/usage"]');
+          if (a) a.click(); else { history.pushState({}, '', '/settings/usage'); dispatchEvent(new PopStateEvent('popstate', {state: {}})); }
+        }
+        return JSON.stringify({away: location.pathname});
+      }
       var root = document.querySelector('main') || document.body;
       var lines = (root.innerText || '').split('\\n').map(function(s){return s.trim();}).filter(Boolean);
       var out = {}, label = '', pcts = [];
