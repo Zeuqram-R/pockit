@@ -11,6 +11,8 @@ final class UsageMonitor: NSObject, ObservableObject, WKNavigationDelegate {
     @Published private(set) var weekly: Int?
     @Published private(set) var updatedAt: Date?
     @Published private(set) var problem: String?
+    /// Lo que se leyó de la página (pa' diagnosticar si algún porcentaje sale vacío).
+    var lastText = ""
 
     private var web: WKWebView?
     private var timer: Timer?
@@ -85,6 +87,7 @@ final class UsageMonitor: NSObject, ObservableObject, WKNavigationDelegate {
                 let obj = (try? JSONSerialization.jsonObject(with: Data(str.utf8))) as? [String: Any] ?? [:]
                 if obj["login"] as? Bool == true { self.problem = "login"; self.finish(); return }
                 let s = obj["s"] as? Int, w = obj["w"] as? Int
+                if let txt = obj["txt"] as? String, !txt.isEmpty { self.lastText = txt }
                 if s != nil || w != nil {
                     if let s { self.session = s }
                     if let w { self.weekly = w }
@@ -119,26 +122,38 @@ final class UsageMonitor: NSObject, ObservableObject, WKNavigationDelegate {
       if (/\\/login/.test(location.pathname)) return JSON.stringify({login:true});
       var root = document.querySelector('main') || document.body;
       var lines = (root.innerText || '').split('\\n').map(function(s){return s.trim();}).filter(Boolean);
-      var out = {}, label = '';
+      var out = {}, label = '', pcts = [];
+      var S = /sesi[oó]n|session|5\\s*h|5 horas|5 hours|l[ií]mite actual|current/i;
+      var W = /todos los modelos|all models|seman|week/i;
+      var X = /(^|\\s)(sonnet|opus|haiku|fable|design|code)\\b|solo |only/i;
       for (var i = 0; i < lines.length; i++) {
         var l = lines[i];
-        if (/sesi[oó]n actual|current session/i.test(l)) label = 's';
-        else if (/todos los modelos|all models/i.test(l)) label = 'w';
-        else if (/l[ií]mites? semanal|weekly limit/i.test(l) && !label) label = 'w';
-        else if (/(^|\\s)(sonnet|opus|haiku|fable|design)\\b|solo |only/i.test(l) && label === 'w' && out.w != null) label = 'x';
-        var m = l.match(/(\\d{1,3})\\s*%/);
-        if (m && (label === 's' || label === 'w') && out[label] == null) out[label] = Math.min(100, parseInt(m[1], 10));
+        var m = l.match(/(\\d{1,3}(?:[.,]\\d+)?)\\s*%/);
+        var hasLabel = l.replace(/[\\d.,]+\\s*%.*/, '').trim().length > 2;
+        if (hasLabel || !m) {
+          if (X.test(l) && out.w != null) label = 'x';
+          else if (W.test(l)) label = 'w';
+          else if (S.test(l)) label = 's';
+        }
+        if (m) {
+          var v = Math.min(100, Math.round(parseFloat(m[1].replace(',', '.'))));
+          pcts.push({v: v, label: label});
+          if ((label === 's' || label === 'w') && out[label] == null) out[label] = v;
+        }
       }
       if (out.s == null || out.w == null) {
-        var bars = document.querySelectorAll('[role=progressbar][aria-valuenow]');
-        bars.forEach(function(b){
-          var ctx = ((b.closest('section,li,div') || b).innerText || '') + ' ' + (b.getAttribute('aria-label') || '');
-          var v = Math.round(parseFloat(b.getAttribute('aria-valuenow')));
-          if (/sesi|session/i.test(ctx) && out.s == null) out.s = v;
-          else if (/seman|week|all models|todos/i.test(ctx) && out.w == null) out.w = v;
+        document.querySelectorAll('[role=progressbar]').forEach(function(b){
+          var v = b.getAttribute('aria-valuenow'); if (v == null) return;
+          var box = b; for (var k = 0; k < 4 && box.parentElement && (box.innerText || '').length < 20; k++) box = box.parentElement;
+          var ctx = (box.innerText || '') + ' ' + (b.getAttribute('aria-label') || '');
+          v = Math.round(parseFloat(v));
+          if (W.test(ctx) && !X.test(ctx) && out.w == null) out.w = v;
+          else if (S.test(ctx) && out.s == null) out.s = v;
         });
       }
-      return JSON.stringify(out);
+      // la sesión es la primera barra de la página; si no tenía nombre reconocible, se usa esa
+      if (out.s == null && pcts.length > 1 && pcts[0].label !== 'w') out.s = pcts[0].v;
+      return JSON.stringify({s: out.s, w: out.w, txt: lines.slice(0, 60).join(' | ').slice(0, 2000)});
     })()
     """
 }
@@ -173,6 +188,10 @@ struct UsageRing: View {
             .overlay(Circle().stroke(Color.white.opacity(0.15), lineWidth: 1))
         }
         .buttonStyle(.plain)
+        .simultaneousGesture(LongPressGesture(minimumDuration: 0.6).onEnded { _ in
+            UIPasteboard.general.string = "Pockit uso · s=\(usage.session.map(String.init) ?? "-") w=\(usage.weekly.map(String.init) ?? "-")\n" + usage.lastText
+            UINotificationFeedbackGenerator().notificationOccurred(.success)
+        })
         .accessibilityLabel(t.s("Uso de Claude", "Claude usage"))
         .accessibilityValue("\(t.s("Semanal", "Weekly")) \(usage.weekly.map { "\($0)%" } ?? "—"), \(t.s("Sesión", "Session")) \(usage.session.map { "\($0)%" } ?? "—")")
         .overlay(alignment: .leading) {
