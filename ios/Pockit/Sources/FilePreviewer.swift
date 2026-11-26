@@ -27,11 +27,16 @@ final class FilePreviewer: NSObject, QLPreviewControllerDataSource, UIGestureRec
         guard let v = shown?.view else { return }
         let ty = g.translation(in: v).y
         let progress = min(1, abs(ty) / 300)
+        func scrolls(_ view: UIView) -> [UIScrollView] { ((view as? UIScrollView).map { [$0] } ?? []) + view.subviews.flatMap { scrolls($0) } }
         switch g.state {
+        case .began:
+            // la foto no se arrastra por dentro mientras se cierra
+            scrolls(v).forEach { $0.panGestureRecognizer.isEnabled = false; $0.panGestureRecognizer.isEnabled = true; $0.isScrollEnabled = false }
         case .changed:
             v.transform = CGAffineTransform(translationX: 0, y: ty).scaledBy(x: 1 - progress * 0.12, y: 1 - progress * 0.12)
             v.alpha = 1 - progress * 0.5
         case .ended, .cancelled:
+            scrolls(v).forEach { $0.isScrollEnabled = true }
             let vy = g.velocity(in: v).y
             if abs(ty) > 110 || abs(vy) > 900 {
                 UIView.animate(withDuration: 0.22, animations: {
@@ -53,15 +58,17 @@ final class FilePreviewer: NSObject, QLPreviewControllerDataSource, UIGestureRec
             guard let p = g as? UIPanGestureRecognizer, let v = p.view else { return true }
             let vel = p.velocity(in: v)
             if abs(vel.y) <= abs(vel.x) * 1.2 { return false }
-            // si la foto está con zoom, el pellizco/arrastre es de la foto
-            func zoomed(_ view: UIView) -> Bool {
-                if let sc = view as? UIScrollView, sc.zoomScale > sc.minimumZoomScale + 0.01 { return true }
-                return view.subviews.contains { zoomed($0) }
+            // 0.8.3: solo si la foto de verdad se puede mover (con zoom, el contenido es más grande que la pantalla)
+            func scrollable(_ view: UIView) -> Bool {
+                if let sc = view as? UIScrollView, sc.isScrollEnabled,
+                   sc.contentSize.height > sc.bounds.height + 2 || sc.contentSize.width > sc.bounds.width + 2,
+                   sc.zoomScale > sc.minimumZoomScale + 0.01 { return true }
+                return view.subviews.contains { scrollable($0) }
             }
-            return !zoomed(v)
+            return !scrollable(v)
         }
     }
-    nonisolated func gestureRecognizer(_ g: UIGestureRecognizer, shouldRecognizeSimultaneouslyWith other: UIGestureRecognizer) -> Bool { false }
+    nonisolated func gestureRecognizer(_ g: UIGestureRecognizer, shouldRecognizeSimultaneouslyWith other: UIGestureRecognizer) -> Bool { true }
 
     /// Guarda bytes que mandó el chat (base64) en un archivo temporal y lo abre.
     func show(base64: String, name: String, mime: String) {
