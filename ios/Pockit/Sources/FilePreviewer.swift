@@ -25,7 +25,9 @@ final class FilePreviewer: NSObject, QLPreviewControllerDataSource, UIGestureRec
 
     @objc private func panned(_ g: UIPanGestureRecognizer) {
         guard let v = shown?.view else { return }
-        let ty = g.translation(in: v).y
+        // 0.8.4: se mide contra la ventana (la vista se mueve con el dedo; medida contra sí misma daba casi 0 y nunca cerraba)
+        let ref = v.window ?? v.superview
+        let ty = g.translation(in: ref).y
         let progress = min(1, abs(ty) / 300)
         func scrolls(_ view: UIView) -> [UIScrollView] { ((view as? UIScrollView).map { [$0] } ?? []) + view.subviews.flatMap { scrolls($0) } }
         switch g.state {
@@ -37,7 +39,7 @@ final class FilePreviewer: NSObject, QLPreviewControllerDataSource, UIGestureRec
             v.alpha = 1 - progress * 0.5
         case .ended, .cancelled:
             scrolls(v).forEach { $0.isScrollEnabled = true }
-            let vy = g.velocity(in: v).y
+            let vy = g.velocity(in: ref).y
             if abs(ty) > 110 || abs(vy) > 900 {
                 UIView.animate(withDuration: 0.22, animations: {
                     v.transform = CGAffineTransform(translationX: 0, y: ty > 0 ? v.bounds.height : -v.bounds.height)
