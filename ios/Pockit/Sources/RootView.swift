@@ -188,6 +188,9 @@ struct RootView: View {
             // 0.6.1: sin internet ya no se queda trabada en la pantalla de carga: se abre la app igual
             // (mapa, tracker, pendientes funcionan) y el chat muestra el aviso.
             while !web.hasLoadedOnce && !web.loadError { try? await Task.sleep(for: .milliseconds(150)) }
+            // 0.8.5: espera a que nuestra burbuja y el chat estén armados (antes se veía la caja gris de claude.ai un segundo)
+            var waited = 0
+            while !web.chatReady && !web.loadError && waited < 25 { try? await Task.sleep(for: .milliseconds(120)); waited += 1 }
             withAnimation(.easeOut(duration: 0.5)) { showLoading = false }
         }
     }

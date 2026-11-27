@@ -65,6 +65,26 @@
   }
 
   let addingPrefix = false;
+  // 0.8.5: sin abrir/cerrar el teclado. Si la caja ya tiene el foco, se escribe ahí mismo;
+  // si no, se le da foco con inputmode=none (no sale el teclado) y se suelta después.
+  function withNoKeyboard(c, fn) {
+    const focused = document.activeElement && (c === document.activeElement || c.contains(document.activeElement));
+    if (focused) { fn(); return; }
+    const prev = c.getAttribute("inputmode");
+    c.setAttribute("inputmode", "none");
+    try { c.focus({ preventScroll: true }); fn(); } finally {
+      setTimeout(() => {
+        try { c.blur(); } catch (e) {}
+        if (prev === null) c.removeAttribute("inputmode"); else c.setAttribute("inputmode", prev);
+      }, 60);
+    }
+  }
+  function markSending() {
+    const card = document.querySelector("[data-cds-part='composer-card']");
+    if (!card) return;
+    card.classList.add("pk-sending");
+    setTimeout(() => card.classList.remove("pk-sending"), 1200);
+  }
   function ensurePrefix() {
     const p = prefix();
     if (!p || addingPrefix) return;
@@ -73,13 +93,15 @@
     const text = composerText(c);
     if (!text.trim() || text.includes("⟦device:")) return;
     addingPrefix = true;
+    markSending();
     try {
       if (c.tagName === "TEXTAREA") {
         setTextareaValue(c, p + c.value);
       } else {
-        c.focus();
-        caretToStart(c);
-        document.execCommand("insertText", false, p);
+        withNoKeyboard(c, () => {
+          caretToStart(c);
+          document.execCommand("insertText", false, p);
+        });
       }
     } catch (e) {
       post({ type: "log", message: "prefix: " + e });
@@ -92,10 +114,15 @@
     const b = e.target && e.target.closest ? e.target.closest("button") : null;
     if (isSendButton(b)) ensurePrefix();
   }, true);
-  document.addEventListener("pointerdown", (e) => {
+  // 0.8.5: tocar enviar no le quita el foco a la caja (así el teclado no se cierra y se vuelve a abrir)
+  const keepFocus = (e) => {
     const b = e.target && e.target.closest ? e.target.closest("button") : null;
-    if (isSendButton(b)) ensurePrefix();
-  }, true);
+    if (!isSendButton(b)) return;
+    e.preventDefault();
+    ensurePrefix();
+  };
+  document.addEventListener("pointerdown", keepFocus, true);
+  document.addEventListener("mousedown", keepFocus, true);
   document.addEventListener("keydown", (e) => {
     if (e.key === "Enter" && !e.shiftKey && !e.isComposing) {
       const c = composer();
@@ -110,12 +137,15 @@
     const full = prefix() + text;
     try { window.pockitMarkSend && window.pockitMarkSend(); } catch (e) {}
     try {
+      markSending();
       if (c.tagName === "TEXTAREA") {
         setTextareaValue(c, full);
       } else {
-        c.focus();
-        document.execCommand("selectAll", false, null);
-        document.execCommand("insertText", false, full);
+        // 0.8.5: sin que salga el teclado
+        withNoKeyboard(c, () => {
+          document.execCommand("selectAll", false, null);
+          document.execCommand("insertText", false, full);
+        });
       }
     } catch (e) {
       post({ type: "sendResult", ok: false, reason: "insert: " + e });
@@ -129,8 +159,8 @@
         addingPrefix = true; // ya trae el prefijo
         b.click();
         addingPrefix = false;
-        // La caja de claude.ai está escondida: soltar el foco pa' que no quede el teclado abierto.
-        try { c.blur(); if (document.activeElement) document.activeElement.blur(); } catch (e) {}
+        // Si el teclado no estaba abierto, que no se abra
+        try { if (c.getAttribute("inputmode") === "none") c.blur(); } catch (e) {}
         post({ type: "sendResult", ok: true });
         return true;
       }

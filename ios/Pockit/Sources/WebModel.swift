@@ -13,6 +13,8 @@ final class WebModel: NSObject, ObservableObject {
 
     @Published var progress: Double = 0
     @Published var hasLoadedOnce = false
+    /// La página ya tiene nuestra burbuja de escribir armada (para quitar la pantalla de carga sin ver la de claude.ai).
+    @Published var chatReady = false
     @Published var loadError = false
     /// false cuando el teléfono pierde internet (pa' avisar en el chat)
     @Published var online = true
@@ -98,6 +100,14 @@ final class WebModel: NSObject, ObservableObject {
         // El borde izquierdo abre el panel de conversaciones (no "atrás").
         webView.allowsBackForwardNavigationGestures = false
         webView.scrollView.contentInsetAdjustmentBehavior = .never
+        // 0.8.5: WKWebView ya no se mueve solo con el teclado (eso empujaba el chat y la burbuja de más y daba el brinco);
+        // la app ya le dice a la página cuánto mide el teclado (pockitKeyboard).
+        for name in [UIResponder.keyboardWillShowNotification, UIResponder.keyboardWillHideNotification,
+                     UIResponder.keyboardWillChangeFrameNotification, UIResponder.keyboardDidShowNotification,
+                     UIResponder.keyboardDidHideNotification, UIResponder.keyboardDidChangeFrameNotification] {
+            NotificationCenter.default.removeObserver(webView, name: name, object: nil)
+            NotificationCenter.default.removeObserver(webView.scrollView, name: name, object: nil)
+        }
         webView.scrollView.bouncesZoom = false
         webView.scrollView.pinchGestureRecognizer?.isEnabled = false
         webView.scrollView.alwaysBounceHorizontal = false
@@ -389,6 +399,8 @@ final class WebModel: NSObject, ObservableObject {
             if isStreaming && pendingFirstMessage != nil { pendingSawStreaming = true }
         case "previewFile":
             if let b = dict["b64"] as? String { FilePreviewer.shared.show(base64: b, name: dict["name"] as? String ?? "", mime: dict["mime"] as? String ?? "") }
+        case "chatReady":
+            if !chatReady { chatReady = true }
         case "copyText":
             if let t = dict["text"] as? String, !t.isEmpty { UIPasteboard.general.string = t }
         case "haptic":
